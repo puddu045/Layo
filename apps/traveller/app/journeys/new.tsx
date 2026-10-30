@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import { flightLookupRequestSchema, manualFlightEntrySchema, type AddJourneySegmentRequest, type FlightCandidate } from '@layo/contracts';
 import { ScreenContainer } from '../../src/components/ScreenContainer';
 import { TextField } from '../../src/components/TextField';
+import { DatePickerField } from '../../src/components/DatePickerField';
 import { Button } from '../../src/components/Button';
 import { Card } from '../../src/components/Card';
 import { useCreateJourney, useFlightLookup } from '../../src/hooks/api-hooks';
@@ -149,11 +150,11 @@ export default function NewJourney() {
             value={flightNumber}
             onChangeText={setFlightNumber}
           />
-          <TextField
-            label="Departure date (YYYY-MM-DD)"
-            placeholder="2026-11-20"
+          <DatePickerField
+            label="Departure date"
             value={departureDate}
-            onChangeText={setDepartureDate}
+            onChange={setDepartureDate}
+            minimumDate={new Date()}
           />
           {lookupError ? <Text style={styles.error}>{lookupError}</Text> : null}
           <Button label="Search" onPress={onSearch} loading={flightLookup.isPending} />
