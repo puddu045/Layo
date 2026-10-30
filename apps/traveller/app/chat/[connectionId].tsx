@@ -9,7 +9,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import type { Message } from '@layo/contracts';
 import { ScreenContainer } from '../../src/components/ScreenContainer';
@@ -21,7 +21,9 @@ import {
   useRealtimeMessages,
   useSendMessage,
 } from '../../src/hooks/chat-hooks';
+import { useBlockUser, useReportContent } from '../../src/hooks/safety-hooks';
 import { useAuth } from '../../src/lib/auth-context';
+import { notifyConfirm, notifyInfo } from '../../src/lib/notify';
 import { colors, radius, spacing, typography } from '../../src/theme/tokens';
 
 export default function ChatScreen() {
@@ -35,8 +37,48 @@ export default function ChatScreen() {
   const messages = useMessages(connectionId);
   const sendMessage = useSendMessage(connectionId ?? '');
   const markRead = useMarkRead(connectionId ?? '');
+  const blockUser = useBlockUser();
+  const reportContent = useReportContent();
 
   const [draft, setDraft] = useState('');
+
+  const onBlock = () => {
+    if (!connection) return;
+    notifyConfirm(
+      `Block ${connection.otherProfile.displayName}?`,
+      "You won't see each other in Discover or be able to message anymore.",
+      () => {
+        blockUser.mutate(
+          connection.otherProfile.userId,
+          {
+            onSuccess: () => {
+              notifyInfo('Blocked', `${connection.otherProfile.displayName} has been blocked.`);
+              router.back();
+            },
+            onError: (err) => notifyInfo('Could not block', err instanceof Error ? err.message : 'Please try again.'),
+          },
+        );
+      },
+      { confirmLabel: 'Block', destructive: true },
+    );
+  };
+
+  const onReportMessage = (message: Message) => {
+    notifyConfirm(
+      'Report this message?',
+      'Report it to moderators for review.',
+      () => {
+        reportContent.mutate(
+          { reportedMessageId: message.id, reason: 'OTHER' },
+          {
+            onSuccess: () => notifyInfo('Reported', 'Thanks — our team will review it.'),
+            onError: (err) => notifyInfo('Could not report', err instanceof Error ? err.message : 'Please try again.'),
+          },
+        );
+      },
+      { confirmLabel: 'Report', destructive: true },
+    );
+  };
 
   // Intentionally depends only on connectionId: mark read once per opened
   // conversation, not on every re-render `markRead` identity changes.
@@ -53,7 +95,16 @@ export default function ChatScreen() {
 
   return (
     <ScreenContainer style={{ paddingHorizontal: 0 }}>
-      <Stack.Screen options={{ title: connection?.otherProfile.displayName ?? 'Chat' }} />
+      <Stack.Screen
+        options={{
+          title: connection?.otherProfile.displayName ?? 'Chat',
+          headerRight: () => (
+            <Pressable onPress={onBlock} hitSlop={8} style={{ paddingHorizontal: spacing.xs }}>
+              <Ionicons name="shield-outline" size={22} color={colors.navy900} />
+            </Pressable>
+          ),
+        }}
+      />
 
       {messages.isLoading ? (
         <LoadingState label="Loading messages…" />
@@ -73,7 +124,13 @@ export default function ChatScreen() {
             data={messages.data?.items ?? []}
             keyExtractor={(item) => item.id}
             contentContainerStyle={styles.listContent}
-            renderItem={({ item }) => <MessageBubble message={item} isMine={item.senderId === session?.user.id} />}
+            renderItem={({ item }) => (
+              <MessageBubble
+                message={item}
+                isMine={item.senderId === session?.user.id}
+                onLongPress={() => onReportMessage(item)}
+              />
+            )}
             ListEmptyComponent={
               <Text style={styles.emptyText}>No messages yet — say hello!</Text>
             }
@@ -102,15 +159,26 @@ export default function ChatScreen() {
   );
 }
 
-function MessageBubble({ message, isMine }: { message: Message; isMine: boolean }) {
+function MessageBubble({
+  message,
+  isMine,
+  onLongPress,
+}: {
+  message: Message;
+  isMine: boolean;
+  onLongPress: () => void;
+}) {
   const time = new Date(message.createdAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
   return (
-    <View style={[styles.bubbleRow, isMine ? styles.bubbleRowMine : styles.bubbleRowTheirs]}>
+    <Pressable
+      onLongPress={isMine ? undefined : onLongPress}
+      style={[styles.bubbleRow, isMine ? styles.bubbleRowMine : styles.bubbleRowTheirs]}
+    >
       <View style={[styles.bubble, isMine ? styles.bubbleMine : styles.bubbleTheirs]}>
         <Text style={[styles.bubbleText, isMine && styles.bubbleTextMine]}>{message.body}</Text>
       </View>
       <Text style={styles.bubbleTime}>{time}</Text>
-    </View>
+    </Pressable>
   );
 }
 

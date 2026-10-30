@@ -85,22 +85,44 @@ This is a pure function ([`connection-state.util.ts`](../apps/api/src/connection
 unit-tested independently of Prisma. `Block` rows (either direction) are checked before any of this.
 
 Messaging is REST-write / Socket.IO-push: clients never write over the socket. `MessagingService` creates a
-`Message` row via REST, then calls `MessagingGateway.emitToUser` for both participants — this keeps validation in
+`Message` row via REST, then calls `RealtimeGateway.emitToUser` for both participants — this keeps validation in
 one place instead of duplicating it between REST and WS handlers. Each authenticated socket joins a
 `user:<id>` room (verified via the same `SupabaseService.verifyAccessToken` the REST guard uses), so a user with
 multiple open devices all receive the same event.
 
+## Airport rooms, moderation & retention (Phase 3)
+
+`AirportRoom` / `AirportRoomMembership` / `AirportRoomMessage` are now fully wired — see
+[`AirportRoomsService`](../apps/api/src/airport-rooms/airport-rooms.service.ts). Eligibility reuses the exact
+same `computePresenceWindows` function Matching uses (via
+[`room-eligibility.ts`](../apps/api/src/airport-rooms/room-eligibility.ts)), then widens each presence window by
+the configured `AIRPORT_ROOM_ACCESS_WINDOW_HOURS_BEFORE`/`_AFTER` — the "before" side is what lets a traveller
+plan a meetup ahead of actually arriving, the "after" side avoids cutting access off the instant they depart.
+**Visibility and eligibility are different things**: a room appears in `GET /airport-rooms` whenever any journey
+touches that airport at all (so the UI can show "opens at…"), but reading or posting is 403'd server-side until
+the window is actually active — "access must be validated by the server using journey information, not just by
+entering an airport code," per the brief.
+
+Message history is cursor-paginated (Prisma's native `cursor`/`skip` on the message `id`), so a new participant
+is never sent a room's full history, and a daily cron (`AirportRoomRetentionService`) prunes messages older than
+`AIRPORT_ROOM_MESSAGE_RETENTION_DAYS` (default 90) — private `Message` rows have no such policy and are never
+pruned. The realtime gateway was renamed `MessagingGateway` → `RealtimeGateway` and extended with `room:join` /
+`room:leave` socket events, each re-checked against the same eligibility windows as the REST endpoints (so a
+socket can't receive live room traffic for an airport it isn't currently eligible for) and an `emitToRoom`
+broadcast method alongside the existing `emitToUser`.
+
+`Block` and `Report` also went from schema-only to fully wired in this phase (`SafetyModule`) — Phase 1–2 only
+ever *read* `Block` for filtering; there was no endpoint to create one until now. `BlocksService` is shared by
+`MatchingService` (Discover filtering), `ConnectionsService` (reject a request between blocked users) and
+`MessagingService` (re-checked on every send, since a block can happen after a connection was already accepted).
+
 ## Foundations for later phases (modelled, not yet wired to an API)
 
-`AirportRoom` / `AirportRoomMembership` / `AirportRoomMessage`, `Business`, `Deal`, `Report`, `Notification`,
-`AuditLog`. These tables exist today so Phase 3–5 work starts from a stable schema, per the Phase 1 brief's
-"database model foundations... ready for later phases" requirement. No NestJS module reads or writes them yet
-except:
-
-- `Block` — schema exists and both `MatchingService` and `ConnectionsService` already respect it (excluded from
-  Discover; rejected from connection requests), even though there's no API endpoint to create a `Block` row yet.
-- `AirportRoom` — a row is auto-created per airport whenever a journey touches it (`JourneysService`), so the
-  table is populated and ready, even though there's no chat module reading from it yet.
+`Business`, `Deal`, `Notification`, `AuditLog`. These tables exist today so Phase 4–5 work starts from a stable
+schema, per the Phase 1 brief's "database model foundations... ready for later phases" requirement. No NestJS
+module reads or writes them yet. `Report.status` also sits unused beyond its `OPEN` default — filing a report
+works (Phase 3), but there's no admin review workflow to transition it to `REVIEWED`/`ACTIONED`/`DISMISSED` yet;
+that's Phase 4/5 admin-portal territory.
 
 ## Supabase auth vs. Postgres users
 

@@ -26,6 +26,7 @@ export default function RootLayout() {
           <Stack.Screen name="journeys/new" options={{ headerShown: true, title: 'Add a flight' }} />
           <Stack.Screen name="journeys/[id]" options={{ headerShown: true, title: 'Journey details' }} />
           <Stack.Screen name="chat/[connectionId]" options={{ headerShown: true, title: 'Chat' }} />
+          <Stack.Screen name="airport-room/[iata]" options={{ headerShown: true, title: 'Airport Chat' }} />
           <Stack.Screen name="settings" options={{ headerShown: true, title: 'Settings' }} />
         </Stack>
       </AuthProvider>

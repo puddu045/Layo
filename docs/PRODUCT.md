@@ -19,7 +19,7 @@ group chat, and browse offers from shops, lounges and restaurants at airports al
 - Friends who end up on the same long-haul flight by coincidence and want to coordinate seating or just say hi.
 - Someone relocating internationally who wants a friendly face during a stressful multi-leg trip.
 
-## Primary flows (Phase 1 + 2 scope)
+## Primary flows (Phase 1 + 2 + 3 scope)
 
 - **Sign up / sign in** — email + password via Supabase Auth, 18+ enforced at signup.
 - **Profile setup** — display name, private date of birth (only age is ever shown publicly), bio, interests,
@@ -31,16 +31,19 @@ group chat, and browse offers from shops, lounges and restaurants at airports al
   clear notice that in-person meeting accessibility is never assumed or guaranteed.
 - **Connect & chat** — send a connection request from Discover (or accept one someone sent you), then message
   privately once accepted, with live delivery over Socket.IO.
+- **Airport Hub** — join the persistent group chat for any airport your journeys touch, once you're within its
+  access window (which opens ahead of your actual arrival, so you can plan a meetup). Report a message or block
+  someone from either a private or a room chat.
 
 ## Explicitly out of scope so far (see [ROADMAP.md](./ROADMAP.md))
 
-- Airport group chats (Phase 3).
 - Airport deals and the business/admin approval workflow (Phase 4) — the admin portal exists as a protected
   foundation, and the data model is ready, but there's no working deal submission/approval flow yet.
+- Admin review of filed reports (you can file one; nobody's reviewed it yet) — that's Phase 4/5 admin-portal work.
 - Push notifications, full security review, E2E test suite, deployment (Phase 5).
 
-The traveller app has all five tabs — Discover, Journeys and Chats are fully functional; Airport Hub and Deals
-show an honest "coming soon" placeholder rather than fake functionality.
+The traveller app has all five tabs — Discover, Journeys, Chats and Airport Hub are fully functional; Deals shows
+an honest "coming soon" placeholder rather than fake functionality.
 
 ## Safety and privacy commitments
 

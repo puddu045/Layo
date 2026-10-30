@@ -26,5 +26,20 @@ export const blockUserRequestSchema = z.object({
 });
 export type BlockUserRequest = z.infer<typeof blockUserRequestSchema>;
 
+export const blockedUserSchema = z.object({
+  blockedUserId: z.string().uuid(),
+  displayName: z.string(),
+  createdAt: z.string().datetime(),
+});
+export type BlockedUser = z.infer<typeof blockedUserSchema>;
+
 export const reportStatusSchema = z.enum(['OPEN', 'REVIEWED', 'ACTIONED', 'DISMISSED']);
 export type ReportStatus = z.infer<typeof reportStatusSchema>;
+
+export const reportSchema = z.object({
+  id: z.string().uuid(),
+  reason: reportReasonSchema,
+  status: reportStatusSchema,
+  createdAt: z.string().datetime(),
+});
+export type Report = z.infer<typeof reportSchema>;

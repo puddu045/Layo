@@ -2,11 +2,15 @@ import { BadRequestException, ConflictException, ForbiddenException, Injectable,
 import type { Connection, ConnectionStatus, ListConnectionsQuery } from '@layo/contracts';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { toPublicProfile } from '../common/mappers/profile.mapper';
+import { BlocksService } from '../safety/blocks.service';
 import { decideConnectRequestAction, type ExistingConnectionInfo } from './connection-state.util';
 
 @Injectable()
 export class ConnectionsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly blocksService: BlocksService,
+  ) {}
 
   async sendRequest(userId: string, addresseeUserId: string): Promise<Connection> {
     if (userId === addresseeUserId) {
@@ -16,7 +20,9 @@ export class ConnectionsService {
     const addressee = await this.prisma.client.user.findUnique({ where: { id: addresseeUserId } });
     if (!addressee) throw new NotFoundException('User not found');
 
-    await this.assertNotBlocked(userId, addresseeUserId);
+    if (await this.blocksService.isBlockedEitherWay(userId, addresseeUserId)) {
+      throw new ForbiddenException('You cannot connect with this user');
+    }
 
     const existingRow = await this.prisma.client.connection.findFirst({
       where: {
@@ -141,18 +147,6 @@ export class ConnectionsService {
     const connection = await this.prisma.client.connection.findUnique({ where: { id: connectionId } });
     if (!connection) throw new NotFoundException('Connection not found');
     return connection;
-  }
-
-  private async assertNotBlocked(userId: string, otherUserId: string) {
-    const block = await this.prisma.client.block.findFirst({
-      where: {
-        OR: [
-          { blockerId: userId, blockedId: otherUserId },
-          { blockerId: otherUserId, blockedId: userId },
-        ],
-      },
-    });
-    if (block) throw new ForbiddenException('You cannot connect with this user');
   }
 
   private async toConnectionDto(

@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { ScheduleModule } from '@nestjs/schedule';
 import { PrismaModule } from './common/prisma/prisma.module';
 import { SupabaseModule } from './common/supabase/supabase.module';
 import { RedisModule } from './common/redis/redis.module';
@@ -14,10 +15,13 @@ import { JourneysModule } from './journeys/journeys.module';
 import { MatchingModule } from './matching/matching.module';
 import { ConnectionsModule } from './connections/connections.module';
 import { MessagingModule } from './messaging/messaging.module';
+import { AirportRoomsModule } from './airport-rooms/airport-rooms.module';
+import { SafetyModule } from './safety/safety.module';
 
 @Module({
   imports: [
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 120 }]),
+    ScheduleModule.forRoot(),
     PrismaModule,
     SupabaseModule,
     RedisModule,
@@ -29,6 +33,8 @@ import { MessagingModule } from './messaging/messaging.module';
     MatchingModule,
     ConnectionsModule,
     MessagingModule,
+    AirportRoomsModule,
+    SafetyModule,
   ],
   controllers: [AppController],
   providers: [

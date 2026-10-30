@@ -49,6 +49,7 @@ const envSchema = z.object({
     .int()
     .positive()
     .default(DEFAULT_MATCHING_CONFIG.airportRoomAccessWindowHoursAfter),
+  AIRPORT_ROOM_MESSAGE_RETENTION_DAYS: z.coerce.number().int().positive().default(90),
 
   MIN_SIGNUP_AGE_YEARS: z.coerce.number().int().positive().default(18),
 });

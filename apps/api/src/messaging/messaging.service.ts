@@ -1,16 +1,18 @@
-import { Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable } from '@nestjs/common';
 import type { ListMessagesQuery, Message, PaginatedResponse, SendMessageRequest } from '@layo/contracts';
 import { socketEvents } from '@layo/contracts';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { ConnectionsService } from '../connections/connections.service';
-import { MessagingGateway } from './messaging.gateway';
+import { RealtimeGateway } from '../realtime/realtime.gateway';
+import { BlocksService } from '../safety/blocks.service';
 
 @Injectable()
 export class MessagingService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly connectionsService: ConnectionsService,
-    private readonly gateway: MessagingGateway,
+    private readonly gateway: RealtimeGateway,
+    private readonly blocksService: BlocksService,
   ) {}
 
   async list(userId: string, connectionId: string, query: ListMessagesQuery): Promise<PaginatedResponse<Message>> {
@@ -37,6 +39,13 @@ export class MessagingService {
 
   async send(userId: string, connectionId: string, dto: SendMessageRequest): Promise<Message> {
     const connection = await this.connectionsService.requireAcceptedParticipant(userId, connectionId);
+
+    const otherParticipantId = connection.requesterId === userId ? connection.addresseeId : connection.requesterId;
+    if (await this.blocksService.isBlockedEitherWay(userId, otherParticipantId)) {
+      // A block can happen after a connection was already accepted — re-check on every send
+      // rather than relying only on the one-time check when the connection was created.
+      throw new ForbiddenException('You cannot message this user');
+    }
 
     const [row] = await this.prisma.client.$transaction([
       this.prisma.client.message.create({

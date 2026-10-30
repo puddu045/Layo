@@ -29,21 +29,31 @@ airport). See [PRODUCT.md](./PRODUCT.md) and the completion report for details a
 - [ ] Image messages and push notifications: left for a later pass — the brief only asks that the design not
       preclude them, not that they ship now.
 
-## Phase 3 — Airport group rooms
+## Phase 3 — Airport group rooms — done
 
-Depends on: `AirportRoom`/`AirportRoomMembership`/`AirportRoomMessage` models (already defined and auto-populated
-per airport by `JourneysService`), `DEFAULT_MATCHING_CONFIG.airportRoomAccessWindowHours*`
-(`packages/config/src/matching.ts`, already defined but unused until this phase).
-
-- [ ] `AirportRoomsModule`: server-side eligibility check using the same presence-window logic as Matching
-      (reuse `computePresenceWindows`, don't re-implement it) — a user may read/post only while within
-      `[presence_start - accessWindowHoursBefore, presence_end + accessWindowHoursAfter]` at that airport.
-- [ ] Paginated message history designed for large rooms (brief requirement: "handle large rooms without
-      sending the full history to every new participant") — cursor-based pagination + Socket.IO for new
-      messages only.
-- [ ] Moderation hooks: reporting/blocking inside a room reuses the Phase 2 `Report`/`Block` infrastructure.
-- [ ] Message retention policy (scheduled job to prune old room messages).
-- [ ] Traveller app: replace the Airport Hub tab placeholder.
+- [x] `AirportRoomsModule`: server-side eligibility reuses `computePresenceWindows` from Matching (not
+      re-implemented) via a shared `computeUserRoomAccessWindows` function — a user may read/post only while
+      within `[presence_start - accessWindowHoursBefore, presence_end + accessWindowHoursAfter]` at that airport.
+      Visibility is separate from eligibility: a room shows up in `GET /airport-rooms` whenever a journey
+      touches that airport at all, marked `eligible: false` with an `accessWindowStartUtc` so the client can say
+      "opens at…", but reading/posting 403s until the window is actually active.
+- [x] Cursor-paginated message history (`GET /airport-rooms/:iata/messages?cursor=&limit=`) so a new participant
+      is never sent a room's full history — plus a push-only Socket.IO channel (`airport-room:<iata>`) for new
+      messages, joined via a `room:join` socket event that's re-validated against the same eligibility check as
+      the REST endpoints (so a socket can't receive live traffic for a room it isn't actually eligible for).
+- [x] Moderation hooks: this phase is what actually built the `Report`/`Block` infrastructure Phase 1–2 only
+      used internally for filtering — see the new `SafetyModule` below.
+- [x] Message retention: a daily cron (`AirportRoomRetentionService`, `@nestjs/schedule`) prunes room messages
+      older than `AIRPORT_ROOM_MESSAGE_RETENTION_DAYS` (default 90). Private `Message` rows are never pruned.
+- [x] Traveller app: real Airport Hub tab (eligible rooms first, "opens at…" for the rest), a group chat screen
+      with sender names and a "load older messages" control, and long-press-to-report on messages.
+- [x] `SafetyModule` (new, not originally scoped to Phase 3 but required for "moderation hooks"): `POST /blocks`,
+      `DELETE /blocks/:userId`, `GET /blocks`, and `POST /reports`. Wired into `MatchingService` (replacing its
+      own duplicate query), `ConnectionsService` (block check before sending a request), and `MessagingService`
+      (re-checked on every send, since a block can happen *after* a connection was accepted). The traveller app's
+      DM chat screen also got a "Block" header action and long-press-to-report, for consistency with rooms.
+- [x] Tests: room access window math (active / not-yet-open / expired, including the "opens N hours before
+      actual arrival" behaviour that supports planning a meetup ahead of time).
 
 ## Phase 4 — Deals, business portal, moderation
 

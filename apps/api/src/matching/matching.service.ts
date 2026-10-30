@@ -3,6 +3,7 @@ import { loadApiEnv, type MatchingConfig } from '@layo/config';
 import type { DiscoverQuery, Match, PaginatedResponse } from '@layo/contracts';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { toPublicProfile } from '../common/mappers/profile.mapper';
+import { BlocksService } from '../safety/blocks.service';
 import { computeMatches, type CandidateTraveller } from './matching.algorithm';
 import { computePresenceWindows, type PresenceSegmentInput, type PresenceWindow } from './presence.util';
 
@@ -10,7 +11,10 @@ import { computePresenceWindows, type PresenceSegmentInput, type PresenceWindow 
 export class MatchingService {
   private readonly config: MatchingConfig;
 
-  constructor(private readonly prisma: PrismaService) {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly blocksService: BlocksService,
+  ) {
     const env = loadApiEnv();
     this.config = {
       departureAirportWindowMinutesBefore: env.DISCOVERY_DEPARTURE_WINDOW_MINUTES_BEFORE,
@@ -65,7 +69,7 @@ export class MatchingService {
       },
     });
 
-    const blockedUserIds = await this.getBlockedUserIds(requesterId);
+    const blockedUserIds = await this.blocksService.getBlockedUserIdSet(requesterId);
     const candidateUserIds = [...new Set(candidateJourneys.map((j) => j.userId))].filter(
       (id) => !blockedUserIds.has(id),
     );
@@ -138,16 +142,6 @@ export class MatchingService {
     return [...new Set([...byFlight, ...byAirport].map((s) => s.journeyId))];
   }
 
-  private async getBlockedUserIds(userId: string): Promise<Set<string>> {
-    const blocks = await this.prisma.client.block.findMany({
-      where: { OR: [{ blockerId: userId }, { blockedId: userId }] },
-    });
-    const ids = new Set<string>();
-    for (const b of blocks) {
-      ids.add(b.blockerId === userId ? b.blockedId : b.blockerId);
-    }
-    return ids;
-  }
 
   private async getConnectionStatuses(
     requesterId: string,
