@@ -1,0 +1,15 @@
+# Local development infrastructure that isn't already provided by the
+# Supabase CLI (which runs its own Postgres via its own Docker setup).
+# Usage: docker compose up -d
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: layo-redis
+    ports:
+      - '6379:6379'
+    volumes:
+      - layo-redis-data:/data
+    restart: unless-stopped
+
+volumes:
+  layo-redis-data:

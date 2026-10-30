@@ -1,0 +1,424 @@
+// Layo data model.
+// Design notes:
+// - User identity (auth-linked) is kept separate from Profile (public-facing details).
+// - All timestamps for flights/journeys are stored in UTC; display-local conversion happens
+//   in clients using each Airport's IANA timezone.
+// - IDs are UUIDs except natural keys (IATA codes) used as primary keys for reference data.
+
+generator client {
+  provider      = "prisma-client-js"
+  output        = "../generated/client"
+  binaryTargets = ["native", "windows", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Identity & profile
+// ---------------------------------------------------------------------------
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  DELETED
+}
+
+/// Mirrors a Supabase Auth user. Holds only identity/account-level fields —
+/// never public-facing profile content.
+model User {
+  id        String     @id @default(uuid()) // matches Supabase auth.users.id
+  email     String     @unique
+  isAdmin   Boolean    @default(false)
+  status    UserStatus @default(ACTIVE)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  deletedAt DateTime?
+
+  profile Profile?
+
+  journeys               Journey[]
+  ownedBusinesses        Business[]
+  sentConnections        Connection[]           @relation("ConnectionRequester")
+  receivedConnections    Connection[]           @relation("ConnectionAddressee")
+  messages               Message[]
+  roomMemberships        AirportRoomMembership[]
+  roomMessages           AirportRoomMessage[]
+  blocksInitiated        Block[]                 @relation("BlockBlocker")
+  blocksReceived         Block[]                 @relation("BlockBlocked")
+  reportsFiled           Report[]                @relation("ReportReporter")
+  reportsReceived        Report[]                @relation("ReportReported")
+  reportsResolved        Report[]                @relation("ReportResolvedBy")
+  notifications          Notification[]
+  auditLogEntries        AuditLog[]
+
+  @@index([status])
+}
+
+/// Public-facing traveller profile. Never exposes date of birth directly — only
+/// a computed age is served to other users.
+model Profile {
+  userId        String   @id
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  displayName   String
+  dateOfBirth   DateTime @db.Date
+  bio           String   @default("")
+  photoUrl      String?
+  interests     String[] @default([])
+  languages     String[] @default([])
+  homeCityIata  String?
+  homeCity      Airport? @relation(fields: [homeCityIata], references: [iataCode])
+  discoverable  Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([discoverable])
+}
+
+// ---------------------------------------------------------------------------
+// Reference data: airports & airlines
+// ---------------------------------------------------------------------------
+
+model Airport {
+  iataCode  String   @id
+  icaoCode  String?
+  name      String
+  city      String
+  country   String
+  timezone  String // IANA timezone
+  latitude  Float?
+  longitude Float?
+
+  departingFlights Flight[]        @relation("DepartureAirport")
+  arrivingFlights  Flight[]        @relation("ArrivalAirport")
+  profilesHome     Profile[]
+  room             AirportRoom?
+  businesses       Business[]
+  deals            Deal[]
+}
+
+model Airline {
+  iataCode String  @id
+  icaoCode String?
+  name     String
+
+  flights Flight[]
+}
+
+// ---------------------------------------------------------------------------
+// Flights & journeys
+// ---------------------------------------------------------------------------
+
+enum FlightStatus {
+  SCHEDULED
+  ACTIVE
+  LANDED
+  CANCELLED
+  DELAYED
+  DIVERTED
+  UNKNOWN
+}
+
+enum FlightDataSource {
+  MOCK
+  AVIATIONSTACK
+  MANUAL
+}
+
+/// A single canonical flight instance (one airline+flight number+date+route).
+/// Multiple users' journeys reference the same Flight row when they are on the
+/// same flight, which is what makes "same flight" matching a simple join.
+model Flight {
+  id                     String           @id @default(uuid())
+  airlineIataCode        String
+  airline                Airline          @relation(fields: [airlineIataCode], references: [iataCode])
+  flightNumber           String
+  operatingFlightNumber  String?
+  departureAirportIata   String
+  departureAirport       Airport          @relation("DepartureAirport", fields: [departureAirportIata], references: [iataCode])
+  arrivalAirportIata     String
+  arrivalAirport         Airport          @relation("ArrivalAirport", fields: [arrivalAirportIata], references: [iataCode])
+  scheduledDepartureUtc  DateTime
+  scheduledArrivalUtc    DateTime
+  departureTerminal      String?
+  arrivalTerminal        String?
+  status                 FlightStatus     @default(SCHEDULED)
+  dataSource             FlightDataSource @default(MOCK)
+  /// De-duplication key: same airline+flight number+scheduled departure date+route
+  /// map to one canonical Flight row so independent journey entries converge.
+  canonicalKey           String           @unique
+  createdAt              DateTime         @default(now())
+  updatedAt              DateTime         @updatedAt
+
+  segments JourneySegment[]
+
+  @@index([departureAirportIata, scheduledDepartureUtc])
+  @@index([arrivalAirportIata, scheduledArrivalUtc])
+  @@index([airlineIataCode, flightNumber])
+}
+
+model Journey {
+  id             String   @id @default(uuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title          String?
+  isDiscoverable Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  segments JourneySegment[]
+
+  @@index([userId])
+}
+
+model JourneySegment {
+  id        String   @id @default(uuid())
+  journeyId String
+  journey   Journey  @relation(fields: [journeyId], references: [id], onDelete: Cascade)
+  flightId  String
+  flight    Flight   @relation(fields: [flightId], references: [id])
+  sequence  Int
+  createdAt DateTime @default(now())
+
+  @@unique([journeyId, sequence])
+  @@index([flightId])
+}
+
+// ---------------------------------------------------------------------------
+// Connections & private messaging
+// ---------------------------------------------------------------------------
+
+enum ConnectionStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  CANCELLED
+}
+
+model Connection {
+  id           String           @id @default(uuid())
+  requesterId  String
+  requester    User             @relation("ConnectionRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  addresseeId  String
+  addressee    User             @relation("ConnectionAddressee", fields: [addresseeId], references: [id], onDelete: Cascade)
+  status       ConnectionStatus @default(PENDING)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  messages Message[]
+
+  @@unique([requesterId, addresseeId])
+  @@index([addresseeId, status])
+  @@index([requesterId, status])
+}
+
+model Message {
+  id           String     @id @default(uuid())
+  connectionId String
+  connection   Connection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  senderId     String
+  sender       User       @relation(fields: [senderId], references: [id])
+  body         String
+  createdAt    DateTime   @default(now())
+  readAt       DateTime?
+
+  @@index([connectionId, createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Airport group rooms
+// ---------------------------------------------------------------------------
+
+model AirportRoom {
+  airportIata String   @id
+  airport     Airport  @relation(fields: [airportIata], references: [iataCode])
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+
+  memberships AirportRoomMembership[]
+  messages    AirportRoomMessage[]
+}
+
+model AirportRoomMembership {
+  id          String      @id @default(uuid())
+  airportIata String
+  room        AirportRoom @relation(fields: [airportIata], references: [airportIata], onDelete: Cascade)
+  userId      String
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// The journey segment that granted access, kept so access can be re-validated/audited.
+  journeySegmentId String?
+  joinedAt    DateTime    @default(now())
+  lastReadAt  DateTime?
+
+  @@unique([airportIata, userId])
+}
+
+model AirportRoomMessage {
+  id          String      @id @default(uuid())
+  airportIata String
+  room        AirportRoom @relation(fields: [airportIata], references: [airportIata], onDelete: Cascade)
+  senderId    String
+  sender      User        @relation(fields: [senderId], references: [id])
+  body        String
+  createdAt   DateTime    @default(now())
+
+  @@index([airportIata, createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Businesses & deals
+// ---------------------------------------------------------------------------
+
+enum BusinessStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+enum BusinessCategory {
+  FOOD_DRINK
+  DUTY_FREE
+  LOUNGE
+  FASHION_RETAIL
+  TRAVEL_ESSENTIALS
+  SERVICES
+}
+
+model Business {
+  id           String           @id @default(uuid())
+  ownerUserId  String
+  owner        User             @relation(fields: [ownerUserId], references: [id])
+  name         String
+  category     BusinessCategory
+  airportIata  String
+  airport      Airport          @relation(fields: [airportIata], references: [iataCode])
+  contactEmail String
+  status       BusinessStatus   @default(PENDING)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  deals Deal[]
+
+  @@index([airportIata, status])
+}
+
+enum DealCategory {
+  FOOD_DRINK
+  DUTY_FREE
+  LOUNGE
+  FASHION_RETAIL
+  TRAVEL_ESSENTIALS
+  SERVICES
+}
+
+enum DealStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  EXPIRED
+}
+
+enum DealLocationType {
+  AIRSIDE
+  LANDSIDE
+  UNKNOWN
+}
+
+enum DealCreatedBy {
+  ADMIN
+  BUSINESS
+}
+
+model Deal {
+  id                   String           @id @default(uuid())
+  businessId           String
+  business             Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  airportIata          String
+  airport              Airport          @relation(fields: [airportIata], references: [iataCode])
+  terminal             String?
+  locationType         DealLocationType @default(UNKNOWN)
+  category             DealCategory
+  title                String
+  description          String
+  termsAndConditions   String?
+  promoCode            String?
+  validFrom            DateTime
+  validUntil           DateTime
+  status               DealStatus       @default(PENDING)
+  createdBy            DealCreatedBy
+  rejectionReason      String?
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+
+  @@index([airportIata, status, validUntil])
+}
+
+// ---------------------------------------------------------------------------
+// Safety: blocking, reporting, moderation, notifications
+// ---------------------------------------------------------------------------
+
+model Block {
+  id        String   @id @default(uuid())
+  blockerId String
+  blocker   User     @relation("BlockBlocker", fields: [blockerId], references: [id], onDelete: Cascade)
+  blockedId String
+  blocked   User     @relation("BlockBlocked", fields: [blockedId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([blockerId, blockedId])
+}
+
+enum ReportStatus {
+  OPEN
+  REVIEWED
+  ACTIONED
+  DISMISSED
+}
+
+model Report {
+  id                    String       @id @default(uuid())
+  reporterId            String
+  reporter              User         @relation("ReportReporter", fields: [reporterId], references: [id])
+  reportedUserId        String?
+  reportedUser          User?        @relation("ReportReported", fields: [reportedUserId], references: [id])
+  reportedMessageId     String?
+  reportedRoomMessageId String?
+  reason                String
+  details               String?
+  status                ReportStatus @default(OPEN)
+  resolvedByAdminId     String?
+  resolvedByAdmin       User?        @relation("ReportResolvedBy", fields: [resolvedByAdminId], references: [id])
+  resolvedAt            DateTime?
+  createdAt             DateTime     @default(now())
+
+  @@index([status])
+}
+
+model Notification {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String
+  payload   Json
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, readAt])
+}
+
+model AuditLog {
+  id             String   @id @default(uuid())
+  actorAdminId   String
+  actorAdmin     User     @relation(fields: [actorAdminId], references: [id])
+  action         String
+  targetType     String
+  targetId       String
+  metadata       Json?
+  createdAt      DateTime @default(now())
+
+  @@index([targetType, targetId])
+}

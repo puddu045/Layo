@@ -1,0 +1,34 @@
+{
+  "name": "layo",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Layo - social networking platform for air travellers (monorepo)",
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev --parallel",
+    "dev:api": "turbo run dev --filter=@layo/api",
+    "dev:traveller": "turbo run dev --filter=@layo/traveller",
+    "dev:admin": "turbo run dev --filter=@layo/admin-portal",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "clean": "turbo run clean",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
+    "db:generate": "pnpm --filter @layo/db generate",
+    "db:migrate": "pnpm --filter @layo/db migrate",
+    "db:seed": "pnpm --filter @layo/db seed",
+    "db:studio": "pnpm --filter @layo/db studio"
+  },
+  "devDependencies": {
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.2",
+    "prettier": "^3.4.2",
+    "eslint": "^8.57.1",
+    "@typescript-eslint/eslint-plugin": "^7.18.0",
+    "@typescript-eslint/parser": "^7.18.0"
+  }
+}
