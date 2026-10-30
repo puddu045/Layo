@@ -7,6 +7,7 @@ import { ScreenContainer } from '../../src/components/ScreenContainer';
 import { MatchCard } from '../../src/components/MatchCard';
 import { EmptyState, ErrorState, LoadingState } from '../../src/components/StateViews';
 import { useDiscover, useJourneys } from '../../src/hooks/api-hooks';
+import { useCreateConnection } from '../../src/hooks/chat-hooks';
 import { notifyInfo } from '../../src/lib/notify';
 import { colors, spacing, typography } from '../../src/theme/tokens';
 
@@ -21,9 +22,22 @@ export default function Discover() {
   const [category, setCategory] = useState<MatchCategory | undefined>(undefined);
   const journeys = useJourneys();
   const discover = useDiscover({ category, page: 1, pageSize: 20 });
+  const createConnection = useCreateConnection();
 
-  const onConnect = () => {
-    notifyInfo('Coming soon', 'Connection requests and private messaging arrive in the next phase.');
+  const onConnect = (userId: string) => {
+    createConnection.mutate(userId, {
+      onSuccess: (connection) => {
+        notifyInfo(
+          connection.status === 'ACCEPTED' ? 'Connected!' : 'Request sent',
+          connection.status === 'ACCEPTED'
+            ? 'You are now connected — find the chat in your Chats tab.'
+            : "They'll see your request in their Chats tab.",
+        );
+      },
+      onError: (err) => {
+        notifyInfo('Could not send request', err instanceof Error ? err.message : 'Please try again.');
+      },
+    });
   };
 
   return (
@@ -67,7 +81,7 @@ export default function Discover() {
         <FlatList
           data={discover.data.items}
           keyExtractor={(item, index) => `${item.category}-${item.profile.userId}-${index}`}
-          renderItem={({ item }) => <MatchCard match={item} onConnect={onConnect} />}
+          renderItem={({ item }) => <MatchCard match={item} onConnect={() => onConnect(item.profile.userId)} />}
           contentContainerStyle={{ paddingBottom: spacing.xl }}
           onRefresh={() => discover.refetch()}
           refreshing={discover.isFetching}

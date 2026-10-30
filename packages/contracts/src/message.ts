@@ -1,7 +1,8 @@
 import { z } from 'zod';
+import { paginationQuerySchema } from './common';
 
+/** The connectionId comes from the URL (`/connections/:connectionId/messages`), not the body. */
 export const sendMessageRequestSchema = z.object({
-  connectionId: z.string().uuid(),
   body: z.string().trim().min(1).max(2000),
 });
 export type SendMessageRequest = z.infer<typeof sendMessageRequestSchema>;
@@ -16,6 +17,9 @@ export const messageSchema = z.object({
 });
 export type Message = z.infer<typeof messageSchema>;
 
+export const listMessagesQuerySchema = paginationQuerySchema;
+export type ListMessagesQuery = z.infer<typeof listMessagesQuerySchema>;
+
 // Socket.IO event payloads shared between API and clients.
 export const socketEvents = {
   MESSAGE_NEW: 'message:new',
@@ -23,3 +27,16 @@ export const socketEvents = {
   ROOM_MESSAGE_NEW: 'room-message:new',
   TYPING: 'typing',
 } as const;
+
+export const messageNewEventSchema = z.object({
+  connectionId: z.string().uuid(),
+  message: messageSchema,
+});
+export type MessageNewEvent = z.infer<typeof messageNewEventSchema>;
+
+export const messageReadEventSchema = z.object({
+  connectionId: z.string().uuid(),
+  readByUserId: z.string().uuid(),
+  readAt: z.string().datetime(),
+});
+export type MessageReadEvent = z.infer<typeof messageReadEventSchema>;

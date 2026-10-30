@@ -19,7 +19,7 @@ group chat, and browse offers from shops, lounges and restaurants at airports al
 - Friends who end up on the same long-haul flight by coincidence and want to coordinate seating or just say hi.
 - Someone relocating internationally who wants a friendly face during a stressful multi-leg trip.
 
-## Primary flows (Phase 1 scope)
+## Primary flows (Phase 1 + 2 scope)
 
 - **Sign up / sign in** — email + password via Supabase Auth, 18+ enforced at signup.
 - **Profile setup** — display name, private date of birth (only age is ever shown publicly), bio, interests,
@@ -29,17 +29,18 @@ group chat, and browse offers from shops, lounges and restaurants at airports al
   automatically calculated layovers.
 - **Discover** — see other travellers matching one of the three categories above, with the overlap window and a
   clear notice that in-person meeting accessibility is never assumed or guaranteed.
+- **Connect & chat** — send a connection request from Discover (or accept one someone sent you), then message
+  privately once accepted, with live delivery over Socket.IO.
 
-## Explicitly out of scope for Phase 1 (see [ROADMAP.md](./ROADMAP.md))
+## Explicitly out of scope so far (see [ROADMAP.md](./ROADMAP.md))
 
-- Connection requests and private messaging (Phase 2).
 - Airport group chats (Phase 3).
 - Airport deals and the business/admin approval workflow (Phase 4) — the admin portal exists as a protected
   foundation, and the data model is ready, but there's no working deal submission/approval flow yet.
 - Push notifications, full security review, E2E test suite, deployment (Phase 5).
 
-The traveller app still has all five tabs today — Discover and Journeys are fully functional; Chats, Airport Hub
-and Deals show an honest "coming soon" placeholder rather than fake functionality.
+The traveller app has all five tabs — Discover, Journeys and Chats are fully functional; Airport Hub and Deals
+show an honest "coming soon" placeholder rather than fake functionality.
 
 ## Safety and privacy commitments
 

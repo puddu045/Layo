@@ -9,22 +9,25 @@ Repository foundation, auth, profiles, flight lookup (mock + Aviationstack adapt
 automatic layover calculation, and traveller discovery (same flight / same departure airport / same layover
 airport). See [PRODUCT.md](./PRODUCT.md) and the completion report for details and known limitations.
 
-## Phase 2 — Connections & private messaging
+## Phase 2 — Connections & private messaging — done
 
-Depends on: Phase 1's `Match`/`PublicProfile` contracts (already shaped to carry a `connectionStatus`), the
-`Connection`/`Message` Prisma models (already defined), `packages/contracts/src/connection.ts` and `message.ts`
-(already defined).
-
-- [ ] `ConnectionsModule` (NestJS): send/accept/decline/cancel, list pending/accepted, enforce one pending
-      request per direction (unique constraint already in schema).
-- [ ] `MessagingModule`: REST history endpoint + Socket.IO gateway for real-time delivery; unread counts.
-- [ ] Socket.IO auth: reuse `SupabaseAuthGuard`'s token verification for the WS handshake.
-- [ ] Traveller app: replace the Chats tab placeholder with connection list + 1:1 chat UI; wire the Discover
-      "Connect" button to the real endpoint (currently shows a "coming soon" alert).
-- [ ] Image messages and push notifications: data model and UI should leave room (e.g. a `Message.attachmentUrl`
-      column) but are not required for Phase 2 itself per the brief ("design for future support... without
-      implementing unnecessary complexity now").
-- [ ] Tests: connection state machine, message ordering/pagination, blocked-user message rejection.
+- [x] `ConnectionsModule` (NestJS): send/accept/decline/cancel, list (optionally filtered by status), with a
+      pure, unit-tested state-machine (`connection-state.util.ts`) deciding what a new request does against
+      any existing relationship row — create, auto-accept (if they already requested you), reopen (if
+      previously declined/cancelled), or reject (already pending/connected). Blocked users are rejected before
+      any of that.
+- [x] `MessagingModule`: paginated REST history (`GET /connections/:id/messages`), send (`POST .../messages`),
+      mark-read (`POST .../messages/read`), and a push-only Socket.IO gateway (`MESSAGE_NEW` / `MESSAGE_READ`) —
+      REST is the only write path; the gateway just notifies whichever participants are currently connected, so
+      validation lives in one place.
+- [x] Socket.IO auth: the gateway verifies the bearer token via the same `SupabaseService.verifyAccessToken`
+      the REST guard uses, then joins the socket to a `user:<id>` room.
+- [x] Traveller app: real Chats tab (requests / messages / sent, with unread badges and live updates), a 1:1
+      chat screen (`app/chat/[connectionId].tsx`), and Discover's "Connect" button now calls the real endpoint.
+- [x] Tests: connection state machine (create / auto-accept / reopen / reject, including both "already
+      connected" and "already pending" rejection paths).
+- [ ] Image messages and push notifications: left for a later pass — the brief only asks that the design not
+      preclude them, not that they ship now.
 
 ## Phase 3 — Airport group rooms
 

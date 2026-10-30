@@ -3,9 +3,10 @@
 Social networking for air travellers — discover people on your flight, at your departure airport, or sharing your
 layover. "Layo" is a temporary working name; see [docs/DECISIONS.md](docs/DECISIONS.md#brand-name) to rebrand.
 
-This is **Phase 1** of the build: repository foundation, authentication, profiles, flight lookup, multi-segment
-journeys with layover calculation, and traveller discovery. See [docs/ROADMAP.md](docs/ROADMAP.md) for what's next
-and [docs/PRODUCT.md](docs/PRODUCT.md) / [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) /
+**Phases 1 and 2** are built: repository foundation, authentication, profiles, flight lookup, multi-segment
+journeys with layover calculation, traveller discovery, and connection requests with real-time private messaging.
+See [docs/ROADMAP.md](docs/ROADMAP.md) for what's next (Phase 3: airport group chats) and
+[docs/PRODUCT.md](docs/PRODUCT.md) / [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) /
 [docs/DATA_MODEL.md](docs/DATA_MODEL.md) / [docs/DECISIONS.md](docs/DECISIONS.md) for everything else.
 
 ## Stack

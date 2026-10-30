@@ -1,7 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { loadApiEnv, type MatchingConfig } from '@layo/config';
-import { calculateAge, type DiscoverQuery, type Match, type PaginatedResponse, type PublicProfile } from '@layo/contracts';
+import type { DiscoverQuery, Match, PaginatedResponse } from '@layo/contracts';
 import { PrismaService } from '../common/prisma/prisma.service';
+import { toPublicProfile } from '../common/mappers/profile.mapper';
 import { computeMatches, type CandidateTraveller } from './matching.algorithm';
 import { computePresenceWindows, type PresenceSegmentInput, type PresenceWindow } from './presence.util';
 
@@ -200,27 +201,6 @@ function toPresenceSegments(
   }));
 }
 
-function toPublicProfile(profile: {
-  userId: string;
-  displayName: string;
-  dateOfBirth: Date;
-  bio: string;
-  interests: string[];
-  languages: string[];
-  homeCityIata: string | null;
-  photoUrl: string | null;
-}): PublicProfile {
-  return {
-    userId: profile.userId,
-    displayName: profile.displayName,
-    age: calculateAge(profile.dateOfBirth.toISOString().slice(0, 10)),
-    bio: profile.bio,
-    interests: profile.interests,
-    languages: profile.languages,
-    homeCityIata: profile.homeCityIata ?? undefined,
-    photoUrl: profile.photoUrl ?? undefined,
-  };
-}
 
 function emptyPage(query: DiscoverQuery): PaginatedResponse<Match> {
   return { items: [], page: query.page, pageSize: query.pageSize, total: 0, totalPages: 0 };

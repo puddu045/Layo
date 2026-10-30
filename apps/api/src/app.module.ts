@@ -12,6 +12,8 @@ import { AirportsModule } from './airports/airports.module';
 import { FlightsModule } from './flights/flights.module';
 import { JourneysModule } from './journeys/journeys.module';
 import { MatchingModule } from './matching/matching.module';
+import { ConnectionsModule } from './connections/connections.module';
+import { MessagingModule } from './messaging/messaging.module';
 
 @Module({
   imports: [
@@ -25,6 +27,8 @@ import { MatchingModule } from './matching/matching.module';
     FlightsModule,
     JourneysModule,
     MatchingModule,
+    ConnectionsModule,
+    MessagingModule,
   ],
   controllers: [AppController],
   providers: [

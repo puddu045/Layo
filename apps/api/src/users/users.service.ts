@@ -1,12 +1,7 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import {
-  calculateAge,
-  type CreateProfileRequest,
-  type OwnProfile,
-  type PublicProfile,
-  type UpdateProfileRequest,
-} from '@layo/contracts';
+import type { CreateProfileRequest, OwnProfile, UpdateProfileRequest } from '@layo/contracts';
 import { PrismaService } from '../common/prisma/prisma.service';
+import { toPublicProfile, type ProfileRow } from '../common/mappers/profile.mapper';
 
 @Injectable()
 export class UsersService {
@@ -73,10 +68,10 @@ export class UsersService {
   }
 
   /** Public-facing view: never includes date of birth or any contact detail. */
-  async getPublicProfile(userId: string): Promise<PublicProfile> {
+  async getPublicProfile(userId: string): Promise<ReturnType<typeof toPublicProfile>> {
     const profile = await this.prisma.client.profile.findUnique({ where: { userId } });
     if (!profile) throw new NotFoundException('Profile not found');
-    return this.toPublicProfile(profile);
+    return toPublicProfile(profile);
   }
 
   private async assertAirportExists(iataCode: string) {
@@ -84,43 +79,11 @@ export class UsersService {
     if (!airport) throw new NotFoundException(`Unknown airport code: ${iataCode}`);
   }
 
-  private toPublicProfile(profile: {
-    userId: string;
-    displayName: string;
-    dateOfBirth: Date;
-    bio: string;
-    interests: string[];
-    languages: string[];
-    homeCityIata: string | null;
-    photoUrl: string | null;
-  }): PublicProfile {
+  private toOwnProfile(
+    profile: ProfileRow & { discoverable: boolean; createdAt: Date; updatedAt: Date },
+  ): OwnProfile {
     return {
-      userId: profile.userId,
-      displayName: profile.displayName,
-      age: calculateAge(profile.dateOfBirth.toISOString().slice(0, 10)),
-      bio: profile.bio,
-      interests: profile.interests,
-      languages: profile.languages,
-      homeCityIata: profile.homeCityIata ?? undefined,
-      photoUrl: profile.photoUrl ?? undefined,
-    };
-  }
-
-  private toOwnProfile(profile: {
-    userId: string;
-    displayName: string;
-    dateOfBirth: Date;
-    bio: string;
-    interests: string[];
-    languages: string[];
-    homeCityIata: string | null;
-    photoUrl: string | null;
-    discoverable: boolean;
-    createdAt: Date;
-    updatedAt: Date;
-  }): OwnProfile {
-    return {
-      ...this.toPublicProfile(profile),
+      ...toPublicProfile(profile),
       dateOfBirth: profile.dateOfBirth.toISOString().slice(0, 10),
       discoverable: profile.discoverable,
       createdAt: profile.createdAt.toISOString(),

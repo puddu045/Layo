@@ -66,15 +66,39 @@ Full algorithm: [`matching.algorithm.ts`](../apps/api/src/matching/matching.algo
 - Expired overlaps (`overlapEndUtc < now`), blocked users (either direction), and non-discoverable
   profiles/journeys are excluded before the pure matching core ever sees a candidate.
 
+## Connections & messaging (Phase 2)
+
+`Connection` and `Message` are now fully wired — see
+[`ConnectionsService`](../apps/api/src/connections/connections.service.ts) and
+[`MessagingService`](../apps/api/src/messaging/messaging.service.ts). The one piece of non-obvious logic is what
+sending a connection request actually *does*, given the unique `(requesterId, addresseeId)` constraint means a
+prior request in the *other* direction doesn't look like a duplicate to a naive check:
+
+- No existing row → create a fresh `PENDING` request.
+- They already sent *you* a pending request → your "connect" accepts theirs, rather than creating a second,
+  reversed row.
+- A row is already `PENDING` from you, or `ACCEPTED` (either direction) → reject.
+- The only existing row was `DECLINED` or `CANCELLED` → reopen that same row as a fresh `PENDING` request from
+  you, instead of accumulating duplicate rows for the same pair of users over time.
+
+This is a pure function ([`connection-state.util.ts`](../apps/api/src/connections/connection-state.util.ts)),
+unit-tested independently of Prisma. `Block` rows (either direction) are checked before any of this.
+
+Messaging is REST-write / Socket.IO-push: clients never write over the socket. `MessagingService` creates a
+`Message` row via REST, then calls `MessagingGateway.emitToUser` for both participants — this keeps validation in
+one place instead of duplicating it between REST and WS handlers. Each authenticated socket joins a
+`user:<id>` room (verified via the same `SupabaseService.verifyAccessToken` the REST guard uses), so a user with
+multiple open devices all receive the same event.
+
 ## Foundations for later phases (modelled, not yet wired to an API)
 
-`Connection`, `Message`, `AirportRoom` / `AirportRoomMembership` / `AirportRoomMessage`, `Business`, `Deal`,
-`Report`, `Block`, `Notification`, `AuditLog`. These tables exist today so Phase 2–5 work starts from a stable
-schema, per the Phase 1 brief's "database model foundations... ready for later phases" requirement. No NestJS
-module reads or writes them yet except:
+`AirportRoom` / `AirportRoomMembership` / `AirportRoomMessage`, `Business`, `Deal`, `Report`, `Notification`,
+`AuditLog`. These tables exist today so Phase 3–5 work starts from a stable schema, per the Phase 1 brief's
+"database model foundations... ready for later phases" requirement. No NestJS module reads or writes them yet
+except:
 
-- `Block` — schema exists and `MatchingService` already excludes blocked users from Discover, even though there's
-  no API endpoint to create a `Block` row yet.
+- `Block` — schema exists and both `MatchingService` and `ConnectionsService` already respect it (excluded from
+  Discover; rejected from connection requests), even though there's no API endpoint to create a `Block` row yet.
 - `AirportRoom` — a row is auto-created per airport whenever a journey touches it (`JourneysService`), so the
   table is populated and ready, even though there's no chat module reading from it yet.
 
