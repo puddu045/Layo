@@ -60,10 +60,11 @@ export class DealsController {
   @Patch(':id/moderate')
   @UseGuards(AdminGuard)
   moderate(
+    @CurrentUser() user: RequestUser,
     @Param('id') id: string,
     @Body(new ZodValidationPipe(moderateDealRequestSchema)) dto: ModerateDealRequest,
   ) {
-    return this.dealsService.moderate(id, dto);
+    return this.dealsService.moderate(user.id, id, dto);
   }
 
   @Delete(':id')

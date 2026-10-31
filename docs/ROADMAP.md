@@ -85,22 +85,54 @@ airport). See [PRODUCT.md](./PRODUCT.md) and the completion report for details a
 
 ## Phase 5 — Notifications, security review, E2E, performance, deployment
 
-- [ ] `NotificationsModule`: in-app notification feed backed by the existing `Notification` model; push
-      notifications (Expo push tokens) once Phase 2/3 messaging exists to notify about.
-- [ ] Security review: rate-limit tuning beyond the current global Throttler default, dependency audit, a pass
-      over every endpoint for authorization (ownership checks already exist per-module — this is the
-      cross-cutting review), secrets handling review.
-- [ ] Account/data deletion workflow (the brief requires this — schema supports soft-delete via `User.status` /
-      `deletedAt`, but there's no user-facing flow yet).
-- [ ] Audit log coverage: `AuditLog` model exists; no admin action writes to it yet — add as each Phase 4/5
-      admin action is built.
-- [ ] End-to-end tests (e.g. Detox for the traveller app, Playwright for the admin portal) covering sign-up →
-      profile → journey → discover → connect → chat → room → deal, once those phases exist.
+This phase bundles five fairly different workstreams. The first pass (below) covers the core,
+buildable-without-an-infra-decision items: notifications, account deletion, audit log coverage, and
+a CI pipeline. The rest — a full security review, E2E tests, the matching-query performance work,
+and production deployment — are left for a deliberate follow-up pass; see the notes under each.
+
+- [x] `NotificationsModule`: a generic in-app notification feed (`GET /notifications`, cursor-paginated,
+      `POST /notifications/:id/read`, `POST /notifications/read-all`) backed by the existing `Notification`
+      model, pushed live over the same per-user Socket.IO room messaging already uses (`notification:new`).
+      Scoped to events with no other visibility in-app: a connection request received or accepted (messaging
+      itself already covers new-message visibility via the Chats tab's own badges, so it isn't duplicated
+      here), and business/deal status changes from Phase 4 moderation — the one place a business owner
+      otherwise had to keep re-checking the business portal to find out. Traveller app: a bell icon with an
+      unread badge on Discover, and a `/notifications` screen. Expo push tokens are still left for later —
+      no physical device to register one against in this environment, and the in-app feed is the prerequisite
+      for push to notify about anyway.
+- [x] Account/data deletion workflow: `DELETE /me` soft-deletes the caller's own account (`User.status` →
+      `DELETED`, `deletedAt` set). No new filtering logic was needed elsewhere — `SupabaseAuthGuard` already
+      rejects any non-`ACTIVE` user on their next request, and `MatchingService` already filters candidates to
+      `status: 'ACTIVE'`, so a deleted user already stops appearing anywhere the moment they're flagged. Rows
+      are kept, not erased, consistent with every other delete in this codebase. Traveller app: "Delete my
+      account" in Settings, replacing the earlier placeholder text, with the same confirm-dialog pattern used
+      for removing a journey.
+- [x] Audit log coverage: a new global `AuditLogService` (parallel to `PrismaModule`'s pattern) is now called
+      from both Phase 4 admin actions — `BusinessesService.applyStatusAction` and `DealsService.moderate` —
+      recording the acting admin, the action, and before/after state. Further admin actions (there are only
+      these two today) should call it the same way as they're added.
+- [x] CI pipeline (`.github/workflows/ci.yml`): typecheck, lint, and test on every PR and push to `main`,
+      across all 6 packages via Turborepo. Needs no database or Supabase instance — every current test is a
+      pure-function unit test, and `prisma generate` only needs the schema file, not a live connection.
+- [ ] Security review: deferred as a deliberate, standalone pass rather than folded into this one — it reads
+      best as a review of the finished surface area (seven modules deep now) rather than something to redo
+      after every future phase. Use the `security-review` or `code-review` skill against the full branch/diff
+      when ready, covering: rate-limit tuning beyond the current global Throttler default, a dependency audit,
+      the cross-cutting authorization pass (ownership checks already exist per-module; this is about verifying
+      there's no gap between them), and secrets handling.
+- [ ] End-to-end tests (Detox for the traveller app, Playwright for the admin portal): deferred. Detox needs a
+      real emulator/device and native build tooling this environment doesn't have; Playwright against the
+      admin-portal is realistic to add in a focused follow-up, now that there's real role-branching UI
+      (admin queues, business portal) worth covering, but wasn't started here to keep this pass to the items
+      with no external tooling dependency.
 - [ ] Performance: the matching service's candidate query (`MatchingService.findCandidateJourneyIds`) is
       reasonable for a demo-scale dataset but does two `IN` queries over journey segments; revisit with real
-      data volume (likely: materialised presence-window table + indexed range queries) before this matters.
-  - [ ] Production readiness: structured logging, health checks beyond `/health`, deployment configuration
-        (containerization, environment-specific config), CI pipeline (typecheck/lint/test on PR).
+      data volume (likely: materialised presence-window table + indexed range queries) before this matters —
+      unchanged from the original note, since nothing in this pass added matching load.
+- [ ] Production readiness beyond CI: structured logging, health checks beyond `/health`, and deployment
+      configuration (containerization, environment-specific config) need a target platform decision first
+      (where this actually runs) that wasn't made in this pass — the CI pipeline above is deployment-adjacent
+      but deliberately stops short of deploying anywhere.
 
 ## Explicitly not planned without a product decision first
 

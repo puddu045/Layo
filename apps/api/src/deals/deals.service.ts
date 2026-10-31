@@ -2,8 +2,10 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException 
 import { BusinessStatus, DealStatus } from '@layo/db';
 import type { CreateDealRequest, Deal, ModerateDealRequest, UpdateDealRequest } from '@layo/contracts';
 import { PrismaService } from '../common/prisma/prisma.service';
+import { AuditLogService } from '../common/audit/audit-log.service';
 import { toDeal } from '../common/mappers/deal.mapper';
 import { BusinessesService } from '../businesses/businesses.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import type { RequestUser } from '../common/guards/supabase-auth.guard';
 
 const DEAL_INCLUDE = { business: { select: { name: true } } } as const;
@@ -13,6 +15,8 @@ export class DealsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly businessesService: BusinessesService,
+    private readonly notificationsService: NotificationsService,
+    private readonly auditLogService: AuditLogService,
   ) {}
 
   async create(user: RequestUser, dto: CreateDealRequest): Promise<Deal> {
@@ -109,13 +113,17 @@ export class DealsService {
     return rows.map(toDeal);
   }
 
-  async moderate(dealId: string, dto: ModerateDealRequest): Promise<Deal> {
-    const existing = await this.prisma.client.deal.findUnique({ where: { id: dealId } });
+  async moderate(adminId: string, dealId: string, dto: ModerateDealRequest): Promise<Deal> {
+    const existing = await this.prisma.client.deal.findUnique({
+      where: { id: dealId },
+      include: { business: { select: { ownerUserId: true } } },
+    });
     if (!existing) throw new NotFoundException('Deal not found');
     if (existing.status !== DealStatus.PENDING) {
       throw new BadRequestException('Only a pending deal can be approved or rejected');
     }
 
+    const status = dto.approve ? DealStatus.APPROVED : DealStatus.REJECTED;
     const row = await this.prisma.client.deal.update({
       where: { id: dealId },
       data: dto.approve
@@ -123,6 +131,18 @@ export class DealsService {
         : { status: DealStatus.REJECTED, rejectionReason: dto.rejectionReason },
       include: DEAL_INCLUDE,
     });
+
+    await Promise.all([
+      this.auditLogService.record(adminId, dto.approve ? 'APPROVE' : 'REJECT', 'Deal', dealId, {
+        rejectionReason: dto.rejectionReason,
+      }),
+      this.notificationsService.create(existing.business.ownerUserId, 'DEAL_STATUS_CHANGED', {
+        dealId,
+        status,
+        rejectionReason: dto.rejectionReason,
+      }),
+    ]);
+
     return toDeal(row);
   }
 

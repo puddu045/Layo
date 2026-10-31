@@ -2,12 +2,18 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException 
 import { BusinessStatus } from '@layo/db';
 import type { Business, RegisterBusinessRequest } from '@layo/contracts';
 import { PrismaService } from '../common/prisma/prisma.service';
+import { AuditLogService } from '../common/audit/audit-log.service';
 import { toBusiness } from '../common/mappers/business.mapper';
+import { NotificationsService } from '../notifications/notifications.service';
 import { nextBusinessStatus, type BusinessStatusAction } from './business-status.util';
 
 @Injectable()
 export class BusinessesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notificationsService: NotificationsService,
+    private readonly auditLogService: AuditLogService,
+  ) {}
 
   async register(userId: string, dto: RegisterBusinessRequest): Promise<Business> {
     const airport = await this.prisma.client.airport.findUnique({ where: { iataCode: dto.airportIata } });
@@ -41,7 +47,7 @@ export class BusinessesService {
     return rows.map(toBusiness);
   }
 
-  async applyStatusAction(businessId: string, action: BusinessStatusAction): Promise<Business> {
+  async applyStatusAction(adminId: string, businessId: string, action: BusinessStatusAction): Promise<Business> {
     const business = await this.prisma.client.business.findUnique({ where: { id: businessId } });
     if (!business) throw new NotFoundException('Business not found');
 
@@ -54,6 +60,15 @@ export class BusinessesService {
       where: { id: businessId },
       data: { status: next },
     });
+
+    await Promise.all([
+      this.auditLogService.record(adminId, action, 'Business', businessId, { from: business.status, to: next }),
+      this.notificationsService.create(business.ownerUserId, 'BUSINESS_STATUS_CHANGED', {
+        businessId,
+        status: next,
+      }),
+    ]);
+
     return toBusiness(row);
   }
 

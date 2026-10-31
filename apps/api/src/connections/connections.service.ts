@@ -3,6 +3,7 @@ import type { Connection, ConnectionStatus, ListConnectionsQuery } from '@layo/c
 import { PrismaService } from '../common/prisma/prisma.service';
 import { toPublicProfile } from '../common/mappers/profile.mapper';
 import { BlocksService } from '../safety/blocks.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { decideConnectRequestAction, type ExistingConnectionInfo } from './connection-state.util';
 
 @Injectable()
@@ -10,6 +11,7 @@ export class ConnectionsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly blocksService: BlocksService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async sendRequest(userId: string, addresseeUserId: string): Promise<Connection> {
@@ -48,6 +50,7 @@ export class ConnectionsService {
         const created = await this.prisma.client.connection.create({
           data: { requesterId: userId, addresseeId: addresseeUserId, status: 'PENDING' },
         });
+        await this.notifyConnectionRequest(addresseeUserId, created.id, userId);
         return this.toConnectionDto(created, userId);
       }
       case 'AUTO_ACCEPT': {
@@ -55,6 +58,7 @@ export class ConnectionsService {
           where: { id: action.existingId },
           data: { status: 'ACCEPTED' },
         });
+        await this.notifyConnectionAccepted(updated.requesterId, updated.id, userId);
         return this.toConnectionDto(updated, userId);
       }
       case 'REOPEN': {
@@ -62,6 +66,7 @@ export class ConnectionsService {
           where: { id: action.existingId },
           data: { requesterId: userId, addresseeId: addresseeUserId, status: 'PENDING' },
         });
+        await this.notifyConnectionRequest(addresseeUserId, updated.id, userId);
         return this.toConnectionDto(updated, userId);
       }
       case 'REJECT': {
@@ -86,6 +91,7 @@ export class ConnectionsService {
       where: { id: connectionId },
       data: { status: 'ACCEPTED' },
     });
+    await this.notifyConnectionAccepted(updated.requesterId, updated.id, userId);
     return this.toConnectionDto(updated, userId);
   }
 
@@ -141,6 +147,14 @@ export class ConnectionsService {
       throw new ConflictException('This connection has not been accepted yet');
     }
     return connection;
+  }
+
+  private async notifyConnectionRequest(addresseeUserId: string, connectionId: string, fromUserId: string) {
+    await this.notificationsService.create(addresseeUserId, 'CONNECTION_REQUEST', { connectionId, fromUserId });
+  }
+
+  private async notifyConnectionAccepted(requesterUserId: string, connectionId: string, byUserId: string) {
+    await this.notificationsService.create(requesterUserId, 'CONNECTION_ACCEPTED', { connectionId, byUserId });
   }
 
   private async requireConnection(connectionId: string) {

@@ -5,6 +5,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { PrismaModule } from './common/prisma/prisma.module';
 import { SupabaseModule } from './common/supabase/supabase.module';
 import { RedisModule } from './common/redis/redis.module';
+import { AuditLogModule } from './common/audit/audit-log.module';
 import { SupabaseAuthGuard } from './common/guards/supabase-auth.guard';
 import { AppController } from './app.controller';
 import { AuthModule } from './auth/auth.module';
@@ -19,6 +20,7 @@ import { AirportRoomsModule } from './airport-rooms/airport-rooms.module';
 import { SafetyModule } from './safety/safety.module';
 import { BusinessesModule } from './businesses/businesses.module';
 import { DealsModule } from './deals/deals.module';
+import { NotificationsModule } from './notifications/notifications.module';
 
 @Module({
   imports: [
@@ -27,6 +29,7 @@ import { DealsModule } from './deals/deals.module';
     PrismaModule,
     SupabaseModule,
     RedisModule,
+    AuditLogModule,
     AuthModule,
     UsersModule,
     AirportsModule,
@@ -39,6 +42,7 @@ import { DealsModule } from './deals/deals.module';
     SafetyModule,
     BusinessesModule,
     DealsModule,
+    NotificationsModule,
   ],
   controllers: [AppController],
   providers: [

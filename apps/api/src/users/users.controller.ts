@@ -1,4 +1,4 @@
-import { Body, Controller, Get, NotFoundException, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, NotFoundException, Param, Patch, Post } from '@nestjs/common';
 import {
   createProfileRequestSchema,
   updateProfileRequestSchema,
@@ -33,6 +33,11 @@ export class UsersController {
     @Body(new ZodValidationPipe(updateProfileRequestSchema)) dto: UpdateProfileRequest,
   ) {
     return this.usersService.updateProfile(user.id, dto);
+  }
+
+  @Delete('me')
+  deleteOwnAccount(@CurrentUser() user: RequestUser) {
+    return this.usersService.deleteOwnAccount(user.id);
   }
 
   @Get('users/:userId/profile')

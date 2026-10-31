@@ -7,13 +7,16 @@ import { TextField } from '../src/components/TextField';
 import { Button } from '../src/components/Button';
 import { ErrorState, LoadingState } from '../src/components/StateViews';
 import { useAuth } from '../src/lib/auth-context';
-import { useOwnProfile, useUpdateProfile } from '../src/hooks/api-hooks';
+import { useDeleteAccount, useOwnProfile, useUpdateProfile } from '../src/hooks/api-hooks';
+import { notifyConfirm, notifyInfo } from '../src/lib/notify';
 import { colors, spacing, typography } from '../src/theme/tokens';
 
 export default function Settings() {
   const { signOut } = useAuth();
   const profile = useOwnProfile();
   const updateProfile = useUpdateProfile();
+  const deleteAccount = useDeleteAccount();
+  const [deleting, setDeleting] = useState(false);
 
   const [displayName, setDisplayName] = useState('');
   const [bio, setBio] = useState('');
@@ -71,6 +74,26 @@ export default function Settings() {
     }
   };
 
+  const onDeleteAccount = () => {
+    notifyConfirm(
+      'Delete your account',
+      'This signs you out permanently and removes your access to Layo. This cannot be undone from the app — contact support to restore it.',
+      async () => {
+        setDeleting(true);
+        try {
+          await deleteAccount.mutateAsync();
+          await signOut();
+          router.replace('/(auth)/welcome');
+        } catch (err) {
+          notifyInfo('Error', err instanceof Error ? err.message : 'Could not delete your account');
+        } finally {
+          setDeleting(false);
+        }
+      },
+      { confirmLabel: 'Delete account', destructive: true },
+    );
+  };
+
   return (
     <ScreenContainer>
       <ScrollView contentContainerStyle={styles.scroll}>
@@ -104,9 +127,10 @@ export default function Settings() {
 
         <Text style={styles.sectionTitle}>Privacy & safety</Text>
         <Text style={styles.hint}>
-          Blocking, reporting and account/data deletion will be manageable from here in an upcoming release. If you
-          need help now, contact support.
+          Blocking and reporting happen from a chat or room screen directly. Deleting your account removes your
+          access immediately; your data is kept per our retention policy rather than erased on the spot.
         </Text>
+        <Button label="Delete my account" variant="danger" onPress={onDeleteAccount} loading={deleting} />
 
         <View style={styles.divider} />
 

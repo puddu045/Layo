@@ -8,6 +8,7 @@ import { MatchCard } from '../../src/components/MatchCard';
 import { EmptyState, ErrorState, LoadingState } from '../../src/components/StateViews';
 import { useDiscover, useJourneys } from '../../src/hooks/api-hooks';
 import { useCreateConnection } from '../../src/hooks/chat-hooks';
+import { useUnreadNotificationsCount } from '../../src/hooks/notification-hooks';
 import { notifyInfo } from '../../src/lib/notify';
 import { colors, spacing, typography } from '../../src/theme/tokens';
 
@@ -23,6 +24,7 @@ export default function Discover() {
   const journeys = useJourneys();
   const discover = useDiscover({ category, page: 1, pageSize: 20 });
   const createConnection = useCreateConnection();
+  const unreadCount = useUnreadNotificationsCount();
 
   const onConnect = (userId: string) => {
     createConnection.mutate(userId, {
@@ -44,11 +46,23 @@ export default function Discover() {
     <ScreenContainer>
       <View style={styles.header}>
         <Text style={styles.title}>Discover</Text>
-        <Link href="/settings" asChild>
-          <Pressable hitSlop={8}>
-            <Ionicons name="settings-outline" size={24} color={colors.navy900} />
-          </Pressable>
-        </Link>
+        <View style={styles.headerIcons}>
+          <Link href="/notifications" asChild>
+            <Pressable hitSlop={8} style={styles.iconButton}>
+              <Ionicons name="notifications-outline" size={24} color={colors.navy900} />
+              {!!unreadCount.data && (
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>{unreadCount.data > 9 ? '9+' : unreadCount.data}</Text>
+                </View>
+              )}
+            </Pressable>
+          </Link>
+          <Link href="/settings" asChild>
+            <Pressable hitSlop={8}>
+              <Ionicons name="settings-outline" size={24} color={colors.navy900} />
+            </Pressable>
+          </Link>
+        </View>
       </View>
 
       <View style={styles.filters}>
@@ -105,6 +119,21 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.sm,
   },
   title: { ...typography.display, color: colors.navy900 },
+  headerIcons: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  iconButton: { position: 'relative' },
+  badge: {
+    position: 'absolute',
+    top: -4,
+    right: -6,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: colors.danger,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+  },
+  badgeText: { color: '#FFFFFF', fontSize: 10, fontWeight: '700' },
   filters: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: spacing.md },
   filterChip: {
     paddingHorizontal: spacing.md,

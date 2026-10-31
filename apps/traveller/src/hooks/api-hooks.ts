@@ -42,6 +42,12 @@ export function useUpdateProfile() {
   });
 }
 
+export function useDeleteAccount() {
+  return useMutation({
+    mutationFn: () => api.delete('/me'),
+  });
+}
+
 export function useJourneys() {
   return useQuery({
     queryKey: ['journeys'],

@@ -74,6 +74,18 @@ export class UsersService {
     return toPublicProfile(profile);
   }
 
+  /** Soft-deletes the account: flips `status` away from `ACTIVE` so `SupabaseAuthGuard` rejects
+   * the caller's next request, and every existing `status: 'ACTIVE'` filter (matching, discover)
+   * already stops surfacing them. Rows are kept, not erased — consistent with every other delete
+   * in this codebase (journeys, connections) being a real decision, not a default to revisit. */
+  async deleteOwnAccount(userId: string): Promise<{ success: true }> {
+    await this.prisma.client.user.update({
+      where: { id: userId },
+      data: { status: 'DELETED', deletedAt: new Date() },
+    });
+    return { success: true };
+  }
+
   private async assertAirportExists(iataCode: string) {
     const airport = await this.prisma.client.airport.findUnique({ where: { iataCode } });
     if (!airport) throw new NotFoundException(`Unknown airport code: ${iataCode}`);

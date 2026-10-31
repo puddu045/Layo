@@ -11,3 +11,4 @@ export * from './airport-room';
 export * from './business';
 export * from './deal';
 export * from './report';
+export * from './notification';

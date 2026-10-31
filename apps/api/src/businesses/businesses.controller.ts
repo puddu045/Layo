@@ -36,25 +36,25 @@ export class BusinessesController {
 
   @Patch(':id/approve')
   @UseGuards(AdminGuard)
-  approve(@Param('id') id: string) {
-    return this.businessesService.applyStatusAction(id, 'APPROVE');
+  approve(@CurrentUser() user: RequestUser, @Param('id') id: string) {
+    return this.businessesService.applyStatusAction(user.id, id, 'APPROVE');
   }
 
   @Patch(':id/reject')
   @UseGuards(AdminGuard)
-  reject(@Param('id') id: string) {
-    return this.businessesService.applyStatusAction(id, 'REJECT');
+  reject(@CurrentUser() user: RequestUser, @Param('id') id: string) {
+    return this.businessesService.applyStatusAction(user.id, id, 'REJECT');
   }
 
   @Patch(':id/suspend')
   @UseGuards(AdminGuard)
-  suspend(@Param('id') id: string) {
-    return this.businessesService.applyStatusAction(id, 'SUSPEND');
+  suspend(@CurrentUser() user: RequestUser, @Param('id') id: string) {
+    return this.businessesService.applyStatusAction(user.id, id, 'SUSPEND');
   }
 
   @Patch(':id/reinstate')
   @UseGuards(AdminGuard)
-  reinstate(@Param('id') id: string) {
-    return this.businessesService.applyStatusAction(id, 'REINSTATE');
+  reinstate(@CurrentUser() user: RequestUser, @Param('id') id: string) {
+    return this.businessesService.applyStatusAction(user.id, id, 'REINSTATE');
   }
 }

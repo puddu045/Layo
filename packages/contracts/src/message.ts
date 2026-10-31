@@ -26,6 +26,7 @@ export const socketEvents = {
   MESSAGE_READ: 'message:read',
   ROOM_MESSAGE_NEW: 'room-message:new',
   TYPING: 'typing',
+  NOTIFICATION_NEW: 'notification:new',
 } as const;
 
 export const messageNewEventSchema = z.object({
