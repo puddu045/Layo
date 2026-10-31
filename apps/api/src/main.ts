@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import 'reflect-metadata';
+import helmet from 'helmet';
 import { NestFactory } from '@nestjs/core';
 import { loadApiEnv } from '@layo/config';
 import { AppModule } from './app.module';
@@ -13,6 +14,7 @@ async function bootstrap() {
   });
 
   app.setGlobalPrefix('api/v1');
+  app.use(helmet());
   app.enableCors({
     origin: env.CORS_ORIGINS,
     credentials: true,

@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import {
   createConnectionRequestSchema,
   listConnectionsQuerySchema,
@@ -23,6 +24,7 @@ export class ConnectionsController {
   }
 
   @Post()
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
   create(
     @CurrentUser() user: RequestUser,
     @Body(new ZodValidationPipe(createConnectionRequestSchema)) dto: CreateConnectionRequest,

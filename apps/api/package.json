@@ -25,6 +25,7 @@
     "@nestjs/websockets": "^10.4.15",
     "@supabase/supabase-js": "^2.47.10",
     "dotenv": "^16.4.5",
+    "helmet": "^8.3.0",
     "ioredis": "^5.4.2",
     "luxon": "^3.5.0",
     "reflect-metadata": "^0.2.2",

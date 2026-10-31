@@ -48,7 +48,11 @@ export function BusinessPortal() {
       </p>
 
       {businesses.map((business) => (
-        <div key={business.id} className="mb-4 rounded-xl border border-border bg-surface p-6 shadow-sm">
+        <div
+          key={business.id}
+          data-testid="business-card"
+          className="mb-4 rounded-xl border border-border bg-surface p-6 shadow-sm"
+        >
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-lg font-bold text-navy-900">{business.name}</h3>

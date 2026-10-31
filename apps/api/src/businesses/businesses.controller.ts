@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import {
   listBusinessesQuerySchema,
   registerBusinessRequestSchema,
@@ -16,6 +17,7 @@ export class BusinessesController {
   constructor(private readonly businessesService: BusinessesService) {}
 
   @Post()
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   register(
     @CurrentUser() user: RequestUser,
     @Body(new ZodValidationPipe(registerBusinessRequestSchema)) dto: RegisterBusinessRequest,

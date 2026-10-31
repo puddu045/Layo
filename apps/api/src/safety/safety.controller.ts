@@ -1,4 +1,5 @@
 import { Body, Controller, Delete, Get, Param, Post } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import {
   blockUserRequestSchema,
   createReportRequestSchema,
@@ -39,6 +40,7 @@ export class ReportsController {
   constructor(private readonly reportsService: ReportsService) {}
 
   @Post()
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   create(
     @CurrentUser() user: RequestUser,
     @Body(new ZodValidationPipe(createReportRequestSchema)) dto: CreateReportRequest,

@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import type { Prisma } from '@layo/db';
 import { loadApiEnv, type MatchingConfig } from '@layo/config';
 import type { DiscoverQuery, Match, PaginatedResponse } from '@layo/contracts';
 import { PrismaService } from '../common/prisma/prisma.service';
@@ -105,41 +106,49 @@ export class MatchingService {
     return paginate(matches, query);
   }
 
+  /** One query instead of two: both the "same flight" and "same airport" cases are OR branches
+   * against the same `JourneySegment` table and the same journey-eligibility filter, so there's no
+   * reason to round-trip twice and dedupe in JS — `distinct` pushes that to Postgres. `Flight` is
+   * already indexed on `(departureAirportIata, scheduledDepartureUtc)` and
+   * `(arrivalAirportIata, scheduledArrivalUtc)`, and `JourneySegment.flightId` is indexed, so this
+   * stays index-driven; the airport/flight `IN` lists are the only unbounded inputs and both are
+   * capped by the requester's own journey count, not the candidate pool size.
+   */
   private async findCandidateJourneyIds(
     requesterId: string,
     airportCodes: string[],
     flightIds: string[],
   ): Promise<string[]> {
-    const baseWhere = {
-      userId: { not: requesterId },
-      isDiscoverable: true,
-      user: { status: 'ACTIVE' as const, profile: { discoverable: true } },
-    };
+    const matchConditions: Prisma.JourneySegmentWhereInput[] = [];
+    if (flightIds.length > 0) {
+      matchConditions.push({ flightId: { in: flightIds } });
+    }
+    if (airportCodes.length > 0) {
+      matchConditions.push({
+        flight: {
+          OR: [
+            { departureAirportIata: { in: airportCodes } },
+            { arrivalAirportIata: { in: airportCodes } },
+          ],
+        },
+      });
+    }
+    if (matchConditions.length === 0) return [];
 
-    const [byFlight, byAirport] = await Promise.all([
-      flightIds.length > 0
-        ? this.prisma.client.journeySegment.findMany({
-            where: { flightId: { in: flightIds }, journey: baseWhere },
-            select: { journeyId: true },
-          })
-        : Promise.resolve([]),
-      airportCodes.length > 0
-        ? this.prisma.client.journeySegment.findMany({
-            where: {
-              journey: baseWhere,
-              flight: {
-                OR: [
-                  { departureAirportIata: { in: airportCodes } },
-                  { arrivalAirportIata: { in: airportCodes } },
-                ],
-              },
-            },
-            select: { journeyId: true },
-          })
-        : Promise.resolve([]),
-    ]);
+    const segments = await this.prisma.client.journeySegment.findMany({
+      where: {
+        OR: matchConditions,
+        journey: {
+          userId: { not: requesterId },
+          isDiscoverable: true,
+          user: { status: 'ACTIVE', profile: { discoverable: true } },
+        },
+      },
+      select: { journeyId: true },
+      distinct: ['journeyId'],
+    });
 
-    return [...new Set([...byFlight, ...byAirport].map((s) => s.journeyId))];
+    return segments.map((s) => s.journeyId);
   }
 
 

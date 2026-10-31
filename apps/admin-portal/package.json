@@ -8,24 +8,27 @@
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "lint": "next lint",
-    "test": "echo \"(no unit tests in admin-portal yet — this is a Phase 1 foundation)\""
+    "test": "echo \"(no unit tests in admin-portal yet — this is a Phase 1 foundation)\"",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@layo/config": "workspace:*",
     "@layo/contracts": "workspace:*",
     "@supabase/supabase-js": "^2.47.10",
-    "next": "14.2.18",
+    "next": "14.2.35",
     "react": "18.2.0",
     "react-dom": "18.2.0",
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.64.1",
     "@types/node": "^22.10.2",
     "@types/react": "~18.2.79",
     "@types/react-dom": "~18.2.25",
     "autoprefixer": "^10.4.20",
+    "dotenv": "^16.4.5",
     "eslint": "^8.57.1",
-    "eslint-config-next": "14.2.18",
+    "eslint-config-next": "14.2.35",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.15",
     "typescript": "^5.7.2"

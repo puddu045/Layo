@@ -83,12 +83,13 @@ airport). See [PRODUCT.md](./PRODUCT.md) and the completion report for details a
       states as the rest of the app.
 - [x] No payments, no real partnerships — promo codes and published offers only, as scoped.
 
-## Phase 5 — Notifications, security review, E2E, performance, deployment
+## Phase 5 — Notifications, security review, E2E, performance, deployment — mostly done
 
-This phase bundles five fairly different workstreams. The first pass (below) covers the core,
-buildable-without-an-infra-decision items: notifications, account deletion, audit log coverage, and
-a CI pipeline. The rest — a full security review, E2E tests, the matching-query performance work,
-and production deployment — are left for a deliberate follow-up pass; see the notes under each.
+This phase bundled five fairly different workstreams, done across two passes. The first covered the
+core, buildable-without-an-infra-decision items: notifications, account deletion, audit log coverage,
+and a CI pipeline. The second covered the security review, E2E tests, and the matching-query
+performance read. Only production deployment remains — it needs a target platform decision (where
+this actually runs) that's the user's call, not something to guess at; see its note below.
 
 - [x] `NotificationsModule`: a generic in-app notification feed (`GET /notifications`, cursor-paginated,
       `POST /notifications/:id/read`, `POST /notifications/read-all`) backed by the existing `Notification`
@@ -114,25 +115,57 @@ and production deployment — are left for a deliberate follow-up pass; see the 
 - [x] CI pipeline (`.github/workflows/ci.yml`): typecheck, lint, and test on every PR and push to `main`,
       across all 6 packages via Turborepo. Needs no database or Supabase instance — every current test is a
       pure-function unit test, and `prisma generate` only needs the schema file, not a live connection.
-- [ ] Security review: deferred as a deliberate, standalone pass rather than folded into this one — it reads
-      best as a review of the finished surface area (seven modules deep now) rather than something to redo
-      after every future phase. Use the `security-review` or `code-review` skill against the full branch/diff
-      when ready, covering: rate-limit tuning beyond the current global Throttler default, a dependency audit,
-      the cross-cutting authorization pass (ownership checks already exist per-module; this is about verifying
-      there's no gap between them), and secrets handling.
-- [ ] End-to-end tests (Detox for the traveller app, Playwright for the admin portal): deferred. Detox needs a
-      real emulator/device and native build tooling this environment doesn't have; Playwright against the
-      admin-portal is realistic to add in a focused follow-up, now that there's real role-branching UI
-      (admin queues, business portal) worth covering, but wasn't started here to keep this pass to the items
-      with no external tooling dependency.
-- [ ] Performance: the matching service's candidate query (`MatchingService.findCandidateJourneyIds`) is
-      reasonable for a demo-scale dataset but does two `IN` queries over journey segments; revisit with real
-      data volume (likely: materialised presence-window table + indexed range queries) before this matters —
-      unchanged from the original note, since nothing in this pass added matching load.
-- [ ] Production readiness beyond CI: structured logging, health checks beyond `/health`, and deployment
-      configuration (containerization, environment-specific config) need a target platform decision first
-      (where this actually runs) that wasn't made in this pass — the CI pipeline above is deployment-adjacent
-      but deliberately stops short of deploying anywhere.
+- [x] Security review:
+  - **Dependency audit** (`pnpm audit --prod`): started at 65 advisories (4 critical, 23 high). Closed down to
+    37 (3 critical, 12 high) with no breaking changes: `next` 14.2.18 → 14.2.35 (closes the critical middleware
+    authorization-bypass advisory and most of the rest — the admin-portal uses no `middleware.ts`, Server
+    Actions, or `next/image`, which also narrows real exposure from the framework-internal findings generally),
+    plus pinned `pnpm.overrides` for `body-parser`, `multer`, `qs`, `lodash`, and `uuid` to their patched
+    versions (all transitively pulled in by `@nestjs/*`/Express). Remaining 3 critical advisories are Next.js
+    findings only fixed in the 15.x line — a major version bump with real regression risk (React 19, config
+    changes) that deserves its own dedicated pass rather than being rushed into this one. `zod`'s one high
+    advisory (memory exhaustion on oversized input) similarly only has a fix in Zod 4, a breaking rewrite of
+    every schema in `packages/contracts` — flagged, not attempted here.
+  - **Rate-limit tuning**: added per-route `@Throttle()` overrides below the global 120/min default on the
+    endpoints actually worth abuse-proofing individually — `POST /businesses` (5/min), `POST /connections`
+    (20/min), `POST /reports` (10/min). Sign-in/sign-up aren't our endpoints to tune — Supabase Auth owns those
+    and has its own limits.
+  - **Cross-cutting authorization pass**: walked every controller. Every mutating endpoint either checks
+    resource ownership in its service (journeys, deals, connections, messaging — all confirmed to compare the
+    row's owner/participant against the caller, not just filter by it) or is behind `AdminGuard`. Confirmed
+    `ZodValidationPipe`'s `safeParse` already strips unknown body fields (Zod's default `.object()` behavior),
+    so mass-assignment isn't a gap. Confirmed the admin-portal's role-branching UI is cosmetic only — the real
+    boundary is server-side (`AdminGuard`), matching `AuthGate.tsx`'s own existing comment about this.
+  - **Secrets handling**: confirmed only `.env.example` files are tracked in git (no real `.env`/`.env.local`
+    anywhere in history), the Supabase service-role key is never constructed outside `SupabaseService` and
+    never sent to any frontend, and token verification always goes through Supabase's own `auth.getUser()`
+    rather than manually decoding a JWT.
+  - Added `helmet()` to the API (`main.ts`) for standard security headers (`X-Content-Type-Options`,
+    `X-Frame-Options`, etc.) — wasn't present before.
+- [x] Performance: read `MatchingService.findCandidateJourneyIds` closely. `Flight` already has the composite
+      indexes this query needs (`(departureAirportIata, scheduledDepartureUtc)`,
+      `(arrivalAirportIata, scheduledArrivalUtc)`), and `JourneySegment.flightId` is indexed — the "two `IN`
+      queries" note undersold it: both queries were already index-driven. Merged them into one query (single
+      `OR` across the same `journeySegment` table, `distinct: ['journeyId']` instead of a JS `Set`) — strictly
+      fewer round-trips, same results (verified against real fixture data, not just the unit tests). The actual
+      scaling concern — computing matches in application code over every candidate row rather than in SQL —
+      is architectural, not a query bug, and still needs real data volume to justify the materialised
+      presence-window table redesign before that's worth building; that part remains deferred, unchanged from
+      the original note.
+- [x] End-to-end tests: Playwright added for the admin portal (`apps/admin-portal/e2e/`, `pnpm test:e2e`),
+      covering login/role-branching (admin nav vs. business portal vs. invalid credentials) and the full Phase 4
+      moderation loop end-to-end through real UI interaction — register a business → admin approves it → submit
+      a deal → admin approves that too. Needs the full local stack already running (Supabase/Postgres/Redis +
+      the API) — Playwright only starts the admin-portal's own dev server. Writing these tests surfaced a real,
+      pre-existing bug: the login page's `<label>` elements were never actually associated with their inputs
+      (no `htmlFor`/`id`, not wrapped) — worked visually, broke for screen readers and for Playwright's
+      `getByLabel()` alike. Fixed. Not wired into CI in this pass (would need Postgres/Supabase/Redis service
+      containers in the GitHub Actions runner — a separate, deliberate piece of work). Detox for the traveller
+      app remains deferred — it needs a real emulator/device and native build tooling this environment doesn't
+      have.
+- [ ] Production readiness: structured logging, health checks beyond `/health`, and deployment configuration
+      (containerization, environment-specific config) need a target platform decision first (where this
+      actually runs) that wasn't made in this pass.
 
 ## Explicitly not planned without a product decision first
 
