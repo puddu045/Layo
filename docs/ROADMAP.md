@@ -55,20 +55,33 @@ airport). See [PRODUCT.md](./PRODUCT.md) and the completion report for details a
 - [x] Tests: room access window math (active / not-yet-open / expired, including the "opens N hours before
       actual arrival" behaviour that supports planning a meetup ahead of time).
 
-## Phase 4 — Deals, business portal, moderation
+## Phase 4 — Deals, business portal, moderation — done
 
-Depends on: `Business`/`Deal` models (already defined), admin portal's protected `(dashboard)` layout (already
-built), `packages/contracts/src/deal.ts` / `business.ts` (already defined).
-
-- [ ] `BusinessesModule`: business self-registration, admin approval queue.
-- [ ] `DealsModule`: business submission, admin approve/reject, public read endpoint (approved + active +
-      within validity window only — exactly the filter already described in
-      `packages/contracts/src/deal.ts`).
-- [ ] Admin portal: wire `/dashboard/deals` and `/dashboard/businesses` (currently static placeholders) to real
-      data with approve/reject actions.
-- [ ] Business portal: a protected dashboard for approved businesses to submit/edit their own deals.
-- [ ] Traveller app: replace the Deals tab placeholder with a real per-airport offers list.
-- [ ] No payments, no real partnerships for this phase (per the brief) — promo codes and published offers only.
+- [x] `BusinessesModule`: self-registration (`POST /businesses`, status `PENDING`), `GET /businesses/me`, and an
+      admin approval queue (`GET /businesses?status=`, `PATCH /businesses/:id/{approve,reject,suspend,reinstate}`
+      guarded by a new `AdminGuard`). Status transitions are decided by a pure, unit-tested state machine
+      (`business-status.util.ts`), same pattern as Phase 2's connection state machine.
+- [x] `DealsModule`: business submission (`POST /deals`, defaults to the caller's one approved business if
+      they only have one, otherwise `businessId` is required), admin approve/reject
+      (`PATCH /deals/:id/moderate`, admin-only), edit (`PATCH /deals/:id` — a non-admin edit always resets
+      status to `PENDING` for re-review, even on an already-approved deal), and delete. A daily cron
+      (`DealExpiryService`) flips lapsed `APPROVED` deals to `EXPIRED`, mirroring the airport-room retention
+      cron from Phase 3.
+- [x] Traveller-facing read endpoint (`GET /deals/for-me`): approved + currently valid deals, scoped server-side
+      to the airports the caller's *own* journeys actually touch (any journey, not just discoverable ones —
+      unlike airport rooms, browsing deals needs no eligibility window) — exactly the filter described in
+      `packages/contracts/src/deal.ts`.
+- [x] Admin portal: `/dashboard/deals` and `/dashboard/businesses` now show real, status-filterable queues with
+      approve/reject/suspend/reinstate actions; the Overview page's pending-deal/pending-business stat cards are
+      wired to real counts.
+- [x] Business portal: rather than a separate app, the existing admin-portal now branches by role (`GET /me` →
+      `isAdmin`) — a non-admin signed-in user sees a business-owner view instead of the admin nav/pages: register
+      a business, see its approval status, and (once approved) submit/edit/delete its deals. This matches the
+      login page's existing "administrator or approved business account" copy from Phase 1. Reports moderation
+      UI is explicitly out of scope here (the `Report`/`Block` backend from Phase 3 has no admin review UI yet).
+- [x] Traveller app: the Deals tab lists real deals grouped by airport, reusing the same empty/loading/error
+      states as the rest of the app.
+- [x] No payments, no real partnerships — promo codes and published offers only, as scoped.
 
 ## Phase 5 — Notifications, security review, E2E, performance, deployment
 

@@ -21,3 +21,10 @@ export const authSessionSchema = z.object({
   hasProfile: z.boolean(),
 });
 export type AuthSession = z.infer<typeof authSessionSchema>;
+
+export const meSchema = z.object({
+  id: z.string().uuid(),
+  email: z.string().email(),
+  isAdmin: z.boolean(),
+});
+export type Me = z.infer<typeof meSchema>;

@@ -22,6 +22,11 @@ export const registerBusinessRequestSchema = z.object({
 });
 export type RegisterBusinessRequest = z.infer<typeof registerBusinessRequestSchema>;
 
+export const listBusinessesQuerySchema = z.object({
+  status: businessStatusSchema.optional(),
+});
+export type ListBusinessesQuery = z.infer<typeof listBusinessesQuerySchema>;
+
 export const businessSchema = z.object({
   id: z.string().uuid(),
   name: z.string(),

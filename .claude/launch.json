@@ -6,6 +6,12 @@
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--filter", "@layo/traveller", "dev:web"],
       "port": 8081
+    },
+    {
+      "name": "admin-portal",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@layo/admin-portal", "dev"],
+      "port": 3000
     }
   ]
 }

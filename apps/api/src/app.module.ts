@@ -17,6 +17,8 @@ import { ConnectionsModule } from './connections/connections.module';
 import { MessagingModule } from './messaging/messaging.module';
 import { AirportRoomsModule } from './airport-rooms/airport-rooms.module';
 import { SafetyModule } from './safety/safety.module';
+import { BusinessesModule } from './businesses/businesses.module';
+import { DealsModule } from './deals/deals.module';
 
 @Module({
   imports: [
@@ -35,6 +37,8 @@ import { SafetyModule } from './safety/safety.module';
     MessagingModule,
     AirportRoomsModule,
     SafetyModule,
+    BusinessesModule,
+    DealsModule,
   ],
   controllers: [AppController],
   providers: [
