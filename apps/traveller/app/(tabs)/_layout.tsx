@@ -1,14 +1,17 @@
+import { StyleSheet, View } from 'react-native';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../../src/theme/tokens';
+import { colors, radius } from '../../src/theme/tokens';
 
 type IconName = keyof typeof Ionicons.glyphMap;
 
-// React Navigation's tabBarIcon color type is an opaque platform color value;
-// Ionicons only accepts a string, so fall back when it isn't one.
-function tabIcon(name: IconName) {
-  return ({ color, size }: { color: unknown; size: number }) => (
-    <Ionicons name={name} color={typeof color === 'string' ? color : colors.textSecondary} size={size} />
+/** One theme colour for every tab's active state — the filled icon sits on a soft tinted pill in
+ * `colors.accent`, matching the active label colour below, instead of a different hue per tab. */
+function tabIcon(outlineName: IconName, filledName: IconName) {
+  return ({ focused, size }: { focused: boolean; color: unknown; size: number }) => (
+    <View style={[styles.iconWrap, focused && styles.iconWrapActive]}>
+      <Ionicons name={focused ? filledName : outlineName} color={focused ? colors.accent : colors.textSecondary} size={size} />
+    </View>
   );
 }
 
@@ -17,7 +20,7 @@ export default function TabsLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: colors.navy900,
+        tabBarActiveTintColor: colors.accent,
         tabBarInactiveTintColor: colors.textSecondary,
         tabBarStyle: { borderTopColor: colors.border },
       }}
@@ -26,37 +29,50 @@ export default function TabsLayout() {
         name="discover"
         options={{
           title: 'Discover',
-          tabBarIcon: tabIcon('compass-outline'),
+          tabBarIcon: tabIcon('compass-outline', 'compass'),
         }}
       />
       <Tabs.Screen
         name="journeys"
         options={{
           title: 'Journeys',
-          tabBarIcon: tabIcon('airplane-outline'),
+          tabBarIcon: tabIcon('airplane-outline', 'airplane'),
         }}
       />
       <Tabs.Screen
         name="chats"
         options={{
           title: 'Chats',
-          tabBarIcon: tabIcon('chatbubble-outline'),
+          tabBarIcon: tabIcon('chatbubble-outline', 'chatbubble'),
         }}
       />
       <Tabs.Screen
         name="airport-hub"
         options={{
           title: 'Airport Hub',
-          tabBarIcon: tabIcon('business-outline'),
+          tabBarIcon: tabIcon('business-outline', 'business'),
         }}
       />
       <Tabs.Screen
         name="deals"
         options={{
           title: 'Deals',
-          tabBarIcon: tabIcon('pricetag-outline'),
+          tabBarIcon: tabIcon('pricetag-outline', 'pricetag'),
         }}
       />
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  iconWrap: {
+    width: 40,
+    height: 32,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconWrapActive: {
+    backgroundColor: colors.teal100,
+  },
+});

@@ -1,6 +1,7 @@
 import { forwardRef, type ComponentRef } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, type PressableProps } from 'react-native';
-import { colors, radius, spacing, typography } from '../theme/tokens';
+import { LinearGradient } from 'expo-linear-gradient';
+import { colors, gradients, radius, spacing, typography } from '../theme/tokens';
 
 interface ButtonProps extends Omit<PressableProps, 'style' | 'children'> {
   label: string;
@@ -26,12 +27,20 @@ export const Button = forwardRef<ComponentRef<typeof Pressable>, ButtonProps>(fu
       disabled={isDisabled}
       style={({ pressed }) => [
         styles.base,
-        variantStyles[variant],
+        variant !== 'primary' && variantStyles[variant],
         isDisabled && styles.disabled,
         pressed && !isDisabled && styles.pressed,
       ]}
       {...rest}
     >
+      {variant === 'primary' && (
+        <LinearGradient
+          colors={gradients.primaryButton}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFill}
+        />
+      )}
       {loading ? (
         <ActivityIndicator color={variant === 'secondary' || variant === 'ghost' ? colors.navy900 : colors.white} />
       ) : (
@@ -49,6 +58,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: 50,
+    overflow: 'hidden',
   },
   label: { ...typography.subtitle },
   disabled: { opacity: 0.5 },
@@ -56,8 +66,7 @@ const styles = StyleSheet.create({
 });
 
 const variantStyles = StyleSheet.create({
-  primary: { backgroundColor: colors.navy900 },
-  secondary: { backgroundColor: colors.teal100 },
+  secondary: { backgroundColor: colors.glassSurfaceStrong, borderWidth: 1, borderColor: colors.glassBorder },
   ghost: { backgroundColor: 'transparent' },
   danger: { backgroundColor: colors.danger },
 });

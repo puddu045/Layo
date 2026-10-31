@@ -97,8 +97,9 @@ export default function Discover() {
           keyExtractor={(item, index) => `${item.category}-${item.profile.userId}-${index}`}
           renderItem={({ item }) => <MatchCard match={item} onConnect={() => onConnect(item.profile.userId)} />}
           contentContainerStyle={{ paddingBottom: spacing.xl }}
-          onRefresh={() => discover.refetch()}
-          refreshing={discover.isFetching}
+          // No pull-to-refresh: react-native-web has no real gesture for it, and on Android a
+          // RefreshControl stuck mid-state (e.g. a background refetch) renders as a stray circle
+          // sitting over the list — not worth it when every screen already refetches on focus.
         />
       ) : (
         <EmptyState

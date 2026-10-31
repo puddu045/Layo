@@ -32,8 +32,9 @@ export default function Journeys() {
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => <JourneyCard journey={item} onPress={() => router.push(`/journeys/${item.id}`)} />}
           contentContainerStyle={{ paddingBottom: spacing.xl }}
-          onRefresh={() => journeys.refetch()}
-          refreshing={journeys.isFetching}
+          // No pull-to-refresh: react-native-web has no real gesture for it, and on Android a
+          // RefreshControl stuck mid-state (e.g. a background refetch) renders as a stray circle
+          // sitting over the list — not worth it when every screen already refetches on focus.
         />
       ) : (
         <EmptyState
