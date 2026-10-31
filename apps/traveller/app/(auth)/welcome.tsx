@@ -93,7 +93,20 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     ...shadow.card,
   },
-  title: { fontFamily: fonts.wordmark, fontSize: 34, lineHeight: 40, letterSpacing: 0.3, color: colors.navy900 },
+  // Pacifico's loops and descenders overshoot a typical sans font's em-box on every side, not
+  // just top/bottom: the "y"'s swoop needs the taller line height, and the capital "L"'s opening
+  // flourish starts drawing to the *left* of the text's own left edge — the text layout still
+  // measures its box from the "L"'s advance origin, so without left padding that stroke clips.
+  title: {
+    fontFamily: fonts.wordmark,
+    fontSize: 41,
+    lineHeight: 72,
+    paddingVertical: spacing.xs,
+    // Horizontal, not just paddingLeft, so the box stays symmetric and the text doesn't visibly
+    // shift off-centre under the logo circle above it.
+    paddingHorizontal: spacing.sm,
+    color: colors.navy900,
+  },
   tagline: { ...typography.body, color: colors.textSecondary, marginTop: spacing.xs, textAlign: 'center' },
   pitchList: { gap: spacing.md },
   pitchItem: { flexDirection: 'row', alignItems: 'center' },

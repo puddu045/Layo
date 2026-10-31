@@ -68,10 +68,9 @@ export const radius = {
 
 /** Loaded in the root layout (`app/_layout.tsx`) via `useFonts` before anything renders — only
  * used for the "Layo" wordmark itself, not body text, to keep that one distinctive without
- * pulling a whole second typeface into every screen. */
+ * pulling a whole second typeface into every screen. Pacifico only ships one weight. */
 export const fonts = {
-  wordmark: 'Poppins_800ExtraBold',
-  wordmarkMedium: 'Poppins_700Bold',
+  wordmark: 'Pacifico_400Regular',
 };
 
 export const typography = {
