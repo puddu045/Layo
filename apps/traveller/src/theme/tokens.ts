@@ -1,9 +1,11 @@
 /**
- * Design tokens for the traveller app. Navy/teal is still the brand anchor,
- * but the palette now carries a handful of vibrant accents (sky, coral,
- * sunset, violet) and a glass vocabulary (translucent surfaces + soft
- * gradient "orbs") for an iOS-style frosted-glass look — cards float over a
- * softly colourful background instead of flat white.
+ * Design tokens for the traveller app. Navy is still the text-ink colour,
+ * but `primary` (violet) is now the one theme colour for every interactive
+ * surface app-wide — buttons, the active tab, the logo mark — carried by a
+ * handful of vibrant accents (sky, coral, sunset, violet itself) for badges
+ * and icon chips, and a glass vocabulary (translucent surfaces) for an
+ * iOS-style look — cards float over a softly colourful background instead
+ * of flat white.
  */
 export const colors = {
   navy900: '#0B2545',
@@ -11,11 +13,18 @@ export const colors = {
   navy500: '#1D4E89',
   teal500: '#1FA2A6',
   teal100: '#E3F6F5',
+
+  // The app's one theme colour — every button, active tab, and link-style
+  // accent now reads from this family instead of navy or teal.
+  primaryLight: '#8E7CF0',
+  primary: '#6C5DD3',
+  primaryDark: '#5243B0',
+  primaryTint: '#EDE9FB',
+
   /** The one accent used for "this is selected/active" across the whole app — the active tab
    * bar icon, its highlight pill, anything else that needs a single consistent theme colour
-   * rather than a different hue per spot. Aliased to teal500, already the app's existing link/
-   * category accent, so this doesn't introduce a second brand colour. */
-  accent: '#1FA2A6',
+   * rather than a different hue per spot. */
+  accent: '#6C5DD3',
 
   // Vibrant accents — used for gradients, badges, and background "orbs",
   // not for body text (keep those on navy/textPrimary for contrast).
@@ -25,7 +34,7 @@ export const colors = {
   sunset: '#FFA94D',
 
   white: '#FFFFFF',
-  background: '#F3F2FA',
+  background: '#F3F1FA',
   surface: '#FFFFFF',
   border: '#E3E8F0',
   textPrimary: '#0F1A2B',
@@ -38,16 +47,21 @@ export const colors = {
   // Glass surfaces: a translucent white over a BlurView, plus a hairline
   // border that catches the light the way iOS's material cards do.
   glassSurface: 'rgba(255, 255, 255, 0.55)',
-  glassSurfaceStrong: 'rgba(255, 255, 255, 0.72)',
+  glassSurfaceStrong: 'rgba(255, 255, 255, 0.30)',
   glassBorder: 'rgba(255, 255, 255, 0.5)',
 };
 
 export const gradients = {
-  hero: ['#0B2545', '#1D4E89', '#4FA8FF'] as const,
-  primaryButton: ['#13335C', '#0B2545'] as const,
+  hero: ['#8E7CF0', '#6C5DD3', '#B46EBF', '#F2A0BB'] as const,
+  primaryButton: ['#8E7CF0', '#6C5DD3'] as const,
   /** The single wash every screen sits on (`GlassBackground`) — one smooth diagonal gradient,
-   * not scattered colour blobs: a pale sky tint settling into the neutral background. */
-  screen: ['#E8F0FE', '#F3F2FA', '#F7F6FB'] as const,
+   * not scattered colour blobs: a pale violet tint settling into the neutral background. Kept
+   * pale everywhere except the welcome screen, which uses `welcomeSky` instead, so cards full of
+   * text stay easy to read. */
+  screen: ['#EFECFB', '#F3F1FA', '#F8F6FB'] as const,
+  /** The bolder lavender → pink → peach "sky" behind the welcome screen specifically — it has no
+   * dense text to protect, so it can afford to be much more saturated than `screen`. */
+  welcomeSky: ['#D9D2F5', '#F0DCEC', '#FCE3D3'] as const,
 };
 
 export const spacing = {
@@ -68,9 +82,9 @@ export const radius = {
 
 /** Loaded in the root layout (`app/_layout.tsx`) via `useFonts` before anything renders — only
  * used for the "Layo" wordmark itself, not body text, to keep that one distinctive without
- * pulling a whole second typeface into every screen. Pacifico only ships one weight. */
+ * pulling a whole second typeface into every screen. */
 export const fonts = {
-  wordmark: 'Pacifico_400Regular',
+  wordmark: 'LobsterTwo_700Bold_Italic',
 };
 
 export const typography = {

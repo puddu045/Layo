@@ -60,10 +60,10 @@ const styles = StyleSheet.create({
   unverified: { ...typography.caption, color: colors.warning, marginTop: 2 },
   layover: {
     ...typography.caption,
-    color: colors.teal500,
+    color: colors.primary,
     fontWeight: '600',
     marginTop: spacing.xs,
-    backgroundColor: colors.teal100,
+    backgroundColor: colors.primaryTint,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
     borderRadius: radius.sm,

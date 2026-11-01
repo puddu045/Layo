@@ -1,18 +1,50 @@
 import { useEffect, useRef } from 'react';
-import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
+import {
+  Animated,
+  Easing,
+  Image,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+  useWindowDimensions,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { ScreenContainer } from '../../src/components/ScreenContainer';
 import { Button } from '../../src/components/Button';
 import { Card } from '../../src/components/Card';
-import { colors, fonts, gradients, shadow, spacing, typography } from '../../src/theme/tokens';
+import {
+  colors,
+  fonts,
+  gradients,
+  radius,
+  shadow,
+  spacing,
+  typography,
+} from '../../src/theme/tokens';
 import { BRAND } from '@layo/config';
 
+type IconName = keyof typeof Ionicons.glyphMap;
+
+const PITCH_ITEMS: Array<{ icon: IconName; text: string; chip: string }> = [
+  { icon: 'airplane', text: 'Find travellers on your flight', chip: colors.primaryTint },
+  { icon: 'business', text: 'Meet people at your departure airport', chip: colors.teal100 },
+  { icon: 'location', text: 'Make the most of a layover, anywhere', chip: '#FFE4D6' },
+];
+
+const PITCH_ICON_COLOR: Record<number, string> = {
+  0: colors.primary,
+  1: colors.teal500,
+  2: colors.sunset,
+};
+
 export default function Welcome() {
-  // Only the plane itself flies in — from the south-west, settling at the circle's centre — the
-  // gradient circle it lands in never moves.
+  // Only the plane itself flies in — from the south-west, settling at the mark's centre — the
+  // gradient mark it lands in never moves.
   const flightIn = useRef(new Animated.Value(0)).current;
+  const { height } = useWindowDimensions();
 
   useEffect(() => {
     Animated.timing(flightIn, {
@@ -33,85 +65,187 @@ export default function Welcome() {
     opacity: flightIn,
   };
 
+  // The airport illustration needs dedicated space at the bottom, not just a backdrop the last
+  // bit of content floats over — on a short viewport there often isn't room for both, so this
+  // screen scrolls (most screens don't need to) with enough bottom padding that the image always
+  // has clear room below the age notice instead of covering the buttons.
+  const airportImageHeight = Math.min(170, height * 0.16);
+
   return (
-    <ScreenContainer style={styles.container}>
-      <View style={styles.hero}>
-        <LinearGradient
-          colors={gradients.hero}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.logoCircle}
+    <View style={styles.root}>
+      {/* This screen doesn't use the shared `ScreenContainer`/`GlassBackground` — it's the one
+          screen with a full-bleed decorative airport illustration behind everything, which needs
+          its own layered background (gradient + image) rather than the app-wide pale wash. */}
+      <LinearGradient
+        colors={gradients.welcomeSky}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
+      <Image
+        source={require('../../assets/images/layo-airport-footer.png')}
+        resizeMode="cover"
+        style={[styles.airportImage, { height: airportImageHeight }]}
+      />
+      <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+        <ScrollView
+          contentContainerStyle={[
+            styles.container,
+            { minHeight: height, paddingBottom: airportImageHeight + spacing.lg },
+          ]}
+          showsVerticalScrollIndicator={false}
         >
-          <Animated.View style={iconTranslate}>
-            <Ionicons name="airplane" size={32} color={colors.white} />
-          </Animated.View>
-        </LinearGradient>
-        <Text style={styles.title}>{BRAND.name}</Text>
-        <Text style={styles.tagline}>{BRAND.tagline}</Text>
-      </View>
+          <View style={styles.hero}>
+            <LinearGradient
+              colors={gradients.hero}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.logoMark}
+            >
+              {/* A glossy top highlight and a soft wave under the plane — plain translucent
+                  shapes, clipped by the mark's own rounded corners, rather than pulling in an SVG
+                  library for two decorations. */}
+              <View style={styles.logoHighlight} />
+              <View style={styles.logoWave} />
+              <View style={[styles.logoWave, styles.logoWaveFaint]} />
+              <Animated.View style={iconTranslate}>
+                <Ionicons name="airplane" size={38} color={colors.white} />
+              </Animated.View>
+            </LinearGradient>
+            <Text style={styles.title}>{BRAND.name}</Text>
+            <Text style={styles.tagline}>{BRAND.tagline}</Text>
+          </View>
 
-      <Card>
-        <View style={styles.pitchList}>
-          <PitchItem text="Find travellers on your flight" color={colors.sky} />
-          <PitchItem text="Meet people at your departure airport" color={colors.violet} />
-          <PitchItem text="Make the most of a layover, anywhere" color={colors.coral} />
-        </View>
-      </Card>
+          <Card>
+            <View style={styles.pitchList}>
+              {PITCH_ITEMS.map((item, index) => (
+                <View
+                  key={item.text}
+                  style={[styles.pitchItem, index > 0 && styles.pitchItemDivider]}
+                >
+                  <View style={[styles.pitchIconChip, { backgroundColor: item.chip }]}>
+                    <Ionicons name={item.icon} size={18} color={PITCH_ICON_COLOR[index]} />
+                  </View>
+                  <Text style={styles.pitchText}>{item.text}</Text>
+                </View>
+              ))}
+            </View>
+          </Card>
 
-      <View style={styles.actions}>
-        {/* Direct router.push, not <Link asChild> — wrapping this Button in Link asChild lost its
-            background style entirely (Expo Router clones the child without resolving a function
-            style), leaving an invisible button. */}
-        <Button label="Create an account" onPress={() => router.push('/(auth)/register')} />
-        <View style={{ height: spacing.sm }} />
-        <Button label="I already have an account" onPress={() => router.push('/(auth)/login')} variant="ghost" />
-      </View>
+          <View style={styles.dots}>
+            <View style={[styles.dot, styles.dotActive]} />
+            <View style={styles.dot} />
+            <View style={styles.dot} />
+          </View>
 
-      <Text style={styles.ageNotice}>You must be 18 or older to use {BRAND.name}.</Text>
-    </ScreenContainer>
-  );
-}
+          <View style={styles.actions}>
+            {/* Direct router.push, not <Link asChild> — wrapping this Button in Link asChild lost
+                its background style entirely (Expo Router clones the child without resolving a
+                function style), leaving an invisible button. */}
+            <Button
+              label="Create an account"
+              icon="person"
+              onPress={() => router.push('/(auth)/register')}
+            />
+            <View style={{ height: spacing.sm }} />
+            <Button
+              label="I already have an account"
+              onPress={() => router.push('/(auth)/login')}
+              variant="ghost"
+            />
+          </View>
 
-function PitchItem({ text, color }: { text: string; color: string }) {
-  return (
-    <View style={styles.pitchItem}>
-      <View style={[styles.bullet, { backgroundColor: color }]} />
-      <Text style={styles.pitchText}>{text}</Text>
+          <Text style={styles.ageNotice}>You must be 18 or older to use {BRAND.name}.</Text>
+        </ScrollView>
+      </SafeAreaView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { justifyContent: 'space-between', paddingVertical: spacing.xl },
-  hero: { alignItems: 'center', marginTop: spacing.xl },
-  logoCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+  root: { flex: 1, backgroundColor: colors.background },
+  airportImage: { position: 'absolute', bottom: 0, left: 0, right: 0, width: '100%' },
+  safeArea: { flex: 1 },
+  container: {
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.lg,
+  },
+  hero: { alignItems: 'center', marginTop: spacing.lg },
+  logoMark: {
+    width: 92,
+    height: 92,
+    borderRadius: 28,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: spacing.md,
+    // marginBottom: spacing.xs,
+    overflow: 'hidden',
     ...shadow.card,
   },
-  // Pacifico's loops and descenders overshoot a typical sans font's em-box on every side, not
-  // just top/bottom: the "y"'s swoop needs the taller line height, and the capital "L"'s opening
-  // flourish starts drawing to the *left* of the text's own left edge — the text layout still
-  // measures its box from the "L"'s advance origin, so without left padding that stroke clips.
+  logoHighlight: {
+    position: 'absolute',
+    top: -36,
+    left: -24,
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    backgroundColor: 'rgba(255,255,255,0.22)',
+  },
+  logoWave: {
+    position: 'absolute',
+    bottom: -8,
+    left: -20,
+    width: 132,
+    height: 42,
+    borderRadius: 66,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    transform: [{ rotate: '-6deg' }],
+  },
+  logoWaveFaint: {
+    bottom: -20,
+    left: -30,
+    opacity: 0.6,
+  },
+  // Script/italic fonts' loops and descenders overshoot a typical sans font's em-box on every
+  // side, not just top/bottom — generous line height and horizontal padding keep those strokes
+  // from clipping against the text's measured box.
   title: {
     fontFamily: fonts.wordmark,
-    fontSize: 41,
-    lineHeight: 72,
+    fontSize: 48,
+    lineHeight: 82,
     paddingVertical: spacing.xs,
     // Horizontal, not just paddingLeft, so the box stays symmetric and the text doesn't visibly
-    // shift off-centre under the logo circle above it.
+    // shift off-centre under the logo mark above it.
     paddingHorizontal: spacing.sm,
     color: colors.navy900,
   },
-  tagline: { ...typography.body, color: colors.textSecondary, marginTop: spacing.xs, textAlign: 'center' },
-  pitchList: { gap: spacing.md },
-  pitchItem: { flexDirection: 'row', alignItems: 'center' },
-  bullet: { width: 8, height: 8, borderRadius: 4, marginRight: spacing.sm },
-  pitchText: { ...typography.body, color: colors.textPrimary },
+  tagline: {
+    ...typography.body,
+    color: colors.textSecondary,
+    marginTop: spacing.xs,
+    marginBottom: spacing.md,
+    textAlign: 'center',
+  },
+  pitchList: {},
+  pitchItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.sm },
+  pitchItemDivider: { borderTopWidth: 1, borderTopColor: colors.border },
+  pitchIconChip: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.sm,
+  },
+  pitchText: { ...typography.body, color: colors.textPrimary, flex: 1 },
+  dots: { flexDirection: 'row', justifyContent: 'center', gap: spacing.xs, marginTop: spacing.lg },
+  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.border },
+  dotActive: { width: 18, backgroundColor: colors.primary },
   actions: { marginTop: spacing.lg },
-  ageNotice: { ...typography.caption, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.md },
+  ageNotice: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginTop: spacing.md,
+  },
 });

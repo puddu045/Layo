@@ -103,7 +103,7 @@ const styles = StyleSheet.create({
   cardTop: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.sm },
   dealTitle: { ...typography.subtitle, color: colors.textPrimary, flex: 1 },
   categoryBadge: {
-    backgroundColor: colors.teal100,
+    backgroundColor: colors.primaryTint,
     borderRadius: radius.sm,
     paddingHorizontal: spacing.sm,
     paddingVertical: 4,
@@ -113,6 +113,6 @@ const styles = StyleSheet.create({
   description: { ...typography.body, color: colors.textPrimary, marginTop: spacing.sm },
   promoRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: spacing.sm },
   promoLabel: { ...typography.caption, color: colors.textSecondary },
-  promoCode: { ...typography.label, color: colors.teal500, fontWeight: '700' },
+  promoCode: { ...typography.label, color: colors.primary, fontWeight: '700' },
   validity: { ...typography.caption, color: colors.textSecondary, marginTop: spacing.sm },
 });

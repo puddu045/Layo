@@ -1,12 +1,15 @@
 import { forwardRef, type ComponentRef } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, type PressableProps } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View, type PressableProps } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import { colors, gradients, radius, spacing, typography } from '../theme/tokens';
 
 interface ButtonProps extends Omit<PressableProps, 'style' | 'children'> {
   label: string;
   onPress: () => void;
   variant?: 'primary' | 'secondary' | 'ghost' | 'danger';
+  /** Optional leading icon, e.g. for a signup CTA (`icon="person"`). */
+  icon?: keyof typeof Ionicons.glyphMap;
   loading?: boolean;
   disabled?: boolean;
 }
@@ -16,10 +19,13 @@ interface ButtonProps extends Omit<PressableProps, 'style' | 'children'> {
  * clones its child and attaches a ref to make the whole element navigable.
  */
 export const Button = forwardRef<ComponentRef<typeof Pressable>, ButtonProps>(function Button(
-  { label, onPress, variant = 'primary', loading, disabled, ...rest },
+  { label, onPress, variant = 'primary', icon, loading, disabled, ...rest },
   ref,
 ) {
   const isDisabled = disabled || loading;
+  const textColor =
+    variant === 'secondary' ? colors.navy900 : variant === 'ghost' ? colors.primary : colors.white;
+
   return (
     <Pressable
       ref={ref}
@@ -42,9 +48,12 @@ export const Button = forwardRef<ComponentRef<typeof Pressable>, ButtonProps>(fu
         />
       )}
       {loading ? (
-        <ActivityIndicator color={variant === 'secondary' || variant === 'ghost' ? colors.navy900 : colors.white} />
+        <ActivityIndicator color={textColor} />
       ) : (
-        <Text style={[styles.label, textVariantStyles[variant]]}>{label}</Text>
+        <View style={styles.content}>
+          {icon && <Ionicons name={icon} size={18} color={textColor} style={styles.icon} />}
+          <Text style={[styles.label, { color: textColor }]}>{label}</Text>
+        </View>
       )}
     </Pressable>
   );
@@ -54,12 +63,14 @@ const styles = StyleSheet.create({
   base: {
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.lg,
-    borderRadius: radius.md,
+    borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: 50,
     overflow: 'hidden',
   },
+  content: { flexDirection: 'row', alignItems: 'center' },
+  icon: { marginRight: spacing.xs },
   label: { ...typography.subtitle },
   disabled: { opacity: 0.5 },
   pressed: { opacity: 0.85 },
@@ -67,13 +78,6 @@ const styles = StyleSheet.create({
 
 const variantStyles = StyleSheet.create({
   secondary: { backgroundColor: colors.glassSurfaceStrong, borderWidth: 1, borderColor: colors.glassBorder },
-  ghost: { backgroundColor: 'transparent' },
+  ghost: { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: colors.primary },
   danger: { backgroundColor: colors.danger },
-});
-
-const textVariantStyles = StyleSheet.create({
-  primary: { color: colors.white },
-  secondary: { color: colors.navy900 },
-  ghost: { color: colors.navy900 },
-  danger: { color: colors.white },
 });

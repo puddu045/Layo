@@ -150,7 +150,7 @@ export default function ChatScreen() {
               onPress={onSend}
               disabled={!draft.trim() || sendMessage.isPending}
             >
-              <Ionicons name="send" size={18} color={colors.white} />
+              <Ionicons name="airplane" size={18} color={colors.white} style={styles.sendIcon} />
             </Pressable>
           </View>
         </KeyboardAvoidingView>
@@ -225,9 +225,12 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: radius.pill,
-    backgroundColor: colors.navy900,
+    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  // Ionicons' "airplane" glyph points due east at rest — this rotates it to north-east, same
+  // convention as the welcome screen's logo mark.
+  sendIcon: { transform: [{ rotate: '-45deg' }] },
   sendButtonDisabled: { opacity: 0.4 },
 });

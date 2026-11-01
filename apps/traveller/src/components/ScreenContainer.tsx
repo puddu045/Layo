@@ -3,10 +3,16 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { GlassBackground } from './GlassBackground';
 import { colors, spacing } from '../theme/tokens';
 
-export function ScreenContainer({ style, children, ...rest }: ViewProps) {
+interface ScreenContainerProps extends ViewProps {
+  /** Passed through to `GlassBackground` — "bold" is for screens with no dense text to protect
+   * (currently just the welcome screen). */
+  backgroundVariant?: 'default' | 'bold';
+}
+
+export function ScreenContainer({ style, children, backgroundVariant, ...rest }: ScreenContainerProps) {
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
-      <GlassBackground />
+      <GlassBackground variant={backgroundVariant} />
       <View style={[styles.container, style]} {...rest}>
         {children}
       </View>

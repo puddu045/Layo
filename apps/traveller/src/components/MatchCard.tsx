@@ -88,7 +88,7 @@ const styles = StyleSheet.create({
   },
   avatarText: { color: colors.white, ...typography.subtitle },
   name: { ...typography.subtitle, color: colors.textPrimary },
-  meta: { ...typography.caption, color: colors.teal500, fontWeight: '600' },
+  meta: { ...typography.caption, color: colors.primary, fontWeight: '600' },
   bio: { ...typography.body, color: colors.textSecondary, marginBottom: spacing.sm },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: spacing.sm },
   windowRow: { marginBottom: spacing.xs },

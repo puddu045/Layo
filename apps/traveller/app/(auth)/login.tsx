@@ -67,5 +67,5 @@ const styles = StyleSheet.create({
   error: { ...typography.caption, color: colors.danger, marginBottom: spacing.md },
   footer: { flexDirection: 'row', justifyContent: 'center', marginTop: spacing.lg, gap: spacing.xs },
   footerText: { ...typography.body, color: colors.textSecondary },
-  link: { ...typography.body, color: colors.teal500, fontWeight: '600' },
+  link: { ...typography.body, color: colors.primary, fontWeight: '600' },
 });

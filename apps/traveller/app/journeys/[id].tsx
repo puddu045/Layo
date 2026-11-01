@@ -120,7 +120,7 @@ const styles = StyleSheet.create({
   scroll: { paddingVertical: spacing.lg, paddingBottom: spacing.xxl, gap: spacing.md },
   title: { ...typography.display, color: colors.navy900, marginBottom: spacing.sm },
   segmentCard: { marginBottom: spacing.md },
-  segmentLabel: { ...typography.label, color: colors.teal500, marginBottom: spacing.xs },
+  segmentLabel: { ...typography.label, color: colors.primary, marginBottom: spacing.xs },
   flightNumber: { ...typography.subtitle, color: colors.textPrimary, marginBottom: spacing.sm },
   route: { ...typography.body, color: colors.textPrimary },
   time: { ...typography.caption, color: colors.textSecondary, marginBottom: spacing.xs },

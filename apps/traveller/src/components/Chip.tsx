@@ -11,7 +11,7 @@ export function Chip({ label }: { label: string }) {
 
 const styles = StyleSheet.create({
   chip: {
-    backgroundColor: colors.teal100,
+    backgroundColor: colors.primaryTint,
     borderRadius: radius.pill,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,

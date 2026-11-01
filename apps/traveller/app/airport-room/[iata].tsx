@@ -119,7 +119,7 @@ export default function AirportRoomScreen() {
               onPress={onSend}
               disabled={!draft.trim() || sendMessage.isPending}
             >
-              <Ionicons name="send" size={18} color={colors.white} />
+              <Ionicons name="airplane" size={18} color={colors.white} style={styles.sendIcon} />
             </Pressable>
           </View>
         </KeyboardAvoidingView>
@@ -159,11 +159,11 @@ const styles = StyleSheet.create({
     transform: [{ scaleY: -1 }],
   },
   loadOlder: { alignItems: 'center', paddingVertical: spacing.md, transform: [{ scaleY: -1 }] },
-  loadOlderText: { ...typography.caption, color: colors.teal500, fontWeight: '600' },
+  loadOlderText: { ...typography.caption, color: colors.primary, fontWeight: '600' },
   bubbleRow: { marginBottom: spacing.sm, maxWidth: '80%' },
   bubbleRowMine: { alignSelf: 'flex-end', alignItems: 'flex-end' },
   bubbleRowTheirs: { alignSelf: 'flex-start', alignItems: 'flex-start' },
-  senderName: { ...typography.caption, color: colors.teal500, fontWeight: '600', marginBottom: 2, marginLeft: spacing.xs },
+  senderName: { ...typography.caption, color: colors.primary, fontWeight: '600', marginBottom: 2, marginLeft: spacing.xs },
   bubble: { borderRadius: radius.lg, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
   bubbleMine: { backgroundColor: colors.navy900, borderBottomRightRadius: radius.sm },
   bubbleTheirs: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderBottomLeftRadius: radius.sm },
@@ -195,9 +195,10 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: radius.pill,
-    backgroundColor: colors.navy900,
+    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  sendIcon: { transform: [{ rotate: '-45deg' }] },
   sendButtonDisabled: { opacity: 0.4 },
 });

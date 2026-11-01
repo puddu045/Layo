@@ -73,6 +73,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   iconWrapActive: {
-    backgroundColor: colors.teal100,
+    backgroundColor: colors.primaryTint,
   },
 });
