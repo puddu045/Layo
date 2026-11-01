@@ -41,7 +41,9 @@ export default function Chats() {
     return (
       <ScreenContainer>
         <ErrorState
-          message={connections.error instanceof Error ? connections.error.message : 'Could not load chats'}
+          message={
+            connections.error instanceof Error ? connections.error.message : 'Could not load chats'
+          }
           onRetry={() => connections.refetch()}
         />
       </ScreenContainer>
@@ -138,7 +140,9 @@ function ConnectionRow({ connection }: { connection: Connection }) {
     <Pressable onPress={() => router.push(`/chat/${connection.id}`)}>
       <Card style={styles.rowCard}>
         <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{connection.otherProfile.displayName.charAt(0).toUpperCase()}</Text>
+          <Text style={styles.avatarText}>
+            {connection.otherProfile.displayName.charAt(0).toUpperCase()}
+          </Text>
         </View>
         <View style={{ flex: 1 }}>
           <View style={styles.rowTop}>
@@ -167,9 +171,14 @@ const styles = StyleSheet.create({
   title: { ...typography.display, color: colors.navy900, marginBottom: spacing.md },
   section: { marginBottom: spacing.lg },
   sectionLabel: { ...typography.label, color: colors.textSecondary, marginBottom: spacing.sm },
-  requestCard: { marginBottom: spacing.sm },
+  requestCard: { marginBottom: spacing.sm, backgroundColor: colors.glassSurfaceStrongMatch },
   requestActions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
-  rowCard: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.sm, gap: spacing.sm },
+  rowCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+    gap: spacing.sm,
+  },
   avatar: {
     width: 44,
     height: 44,

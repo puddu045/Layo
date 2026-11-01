@@ -48,6 +48,7 @@ export const colors = {
   // border that catches the light the way iOS's material cards do.
   glassSurface: 'rgba(255, 255, 255, 0.55)',
   glassSurfaceStrong: 'rgba(255, 255, 255, 0.30)',
+  glassSurfaceStrongMatch: 'rgba(255, 255, 255, 0.50)',
   glassBorder: 'rgba(255, 255, 255, 0.5)',
 };
 

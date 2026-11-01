@@ -32,7 +32,9 @@ export default function AirportHub() {
         <LoadingState label="Finding your airport rooms…" />
       ) : rooms.isError ? (
         <ErrorState
-          message={rooms.error instanceof Error ? rooms.error.message : 'Could not load airport rooms'}
+          message={
+            rooms.error instanceof Error ? rooms.error.message : 'Could not load airport rooms'
+          }
           onRetry={() => rooms.refetch()}
         />
       ) : !rooms.data || rooms.data.length === 0 ? (
@@ -85,7 +87,10 @@ function RoomCard({ room }: { room: AirportRoomSummary }) {
   if (!room.eligible) return content;
 
   return (
-    <Pressable onPress={() => router.push(`/airport-room/${room.airportIata}`)} android_ripple={{ color: colors.border }}>
+    <Pressable
+      onPress={() => router.push(`/airport-room/${room.airportIata}`)}
+      android_ripple={{ color: colors.border }}
+    >
       {content}
     </Pressable>
   );
@@ -94,7 +99,7 @@ function RoomCard({ room }: { room: AirportRoomSummary }) {
 const styles = StyleSheet.create({
   header: { paddingTop: spacing.md, paddingBottom: spacing.sm },
   title: { ...typography.display, color: colors.navy900 },
-  card: { marginBottom: spacing.md },
+  card: { marginBottom: spacing.md, backgroundColor: colors.glassSurfaceStrongMatch },
   cardDisabled: { opacity: 0.6 },
   cardTop: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   iataBadge: {
@@ -108,5 +113,10 @@ const styles = StyleSheet.create({
   iataText: { ...typography.label, color: colors.navy700 },
   name: { ...typography.subtitle, color: colors.textPrimary },
   participants: { ...typography.caption, color: colors.textSecondary, marginTop: 2 },
-  statusText: { ...typography.caption, color: colors.primary, fontWeight: '600', marginTop: spacing.sm },
+  statusText: {
+    ...typography.caption,
+    color: colors.primary,
+    fontWeight: '600',
+    marginTop: spacing.sm,
+  },
 });

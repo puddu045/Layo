@@ -17,7 +17,10 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 
 function formatDate(iso: string): string {
-  return new Date(`${iso}T00:00:00Z`).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+  return new Date(`${iso}T00:00:00Z`).toLocaleDateString(undefined, {
+    day: 'numeric',
+    month: 'short',
+  });
 }
 
 function groupByAirport(deals: Deal[]): Array<[string, Deal[]]> {
@@ -99,8 +102,13 @@ const styles = StyleSheet.create({
   title: { ...typography.display, color: colors.navy900 },
   group: { marginBottom: spacing.lg },
   groupTitle: { ...typography.label, color: colors.navy700, marginBottom: spacing.sm },
-  card: { marginBottom: spacing.md },
-  cardTop: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.sm },
+  card: { marginBottom: spacing.md, backgroundColor: colors.glassSurfaceStrongMatch },
+  cardTop: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
   dealTitle: { ...typography.subtitle, color: colors.textPrimary, flex: 1 },
   categoryBadge: {
     backgroundColor: colors.primaryTint,

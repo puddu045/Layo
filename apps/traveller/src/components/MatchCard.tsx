@@ -68,14 +68,16 @@ export function MatchCard({ match, onConnect }: { match: Match; onConnect: () =>
         }
         onPress={onConnect}
         variant={match.connectionStatus === 'NONE' ? 'primary' : 'secondary'}
-        disabled={match.connectionStatus === 'ACCEPTED' || match.connectionStatus === 'PENDING_SENT'}
+        disabled={
+          match.connectionStatus === 'ACCEPTED' || match.connectionStatus === 'PENDING_SENT'
+        }
       />
     </Card>
   );
 }
 
 const styles = StyleSheet.create({
-  card: { marginBottom: spacing.md },
+  card: { marginBottom: spacing.md, backgroundColor: colors.glassSurfaceStrongMatch },
   header: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.sm },
   avatar: {
     width: 48,

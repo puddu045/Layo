@@ -28,10 +28,13 @@ export function JourneyCard({ journey, onPress }: { journey: Journey; onPress: (
         {journey.segments.map((segment) => (
           <View key={segment.id} style={styles.segmentRow}>
             <Text style={styles.segmentFlight}>
-              {segment.flight.airline.iataCode}{segment.flight.flightNumber.replace(/^[A-Z]{2}/, '')} ·{' '}
+              {segment.flight.airline.iataCode}
+              {segment.flight.flightNumber.replace(/^[A-Z]{2}/, '')} ·{' '}
               {segment.flight.departureAirport.iataCode} → {segment.flight.arrivalAirport.iataCode}
             </Text>
-            <Text style={styles.segmentTime}>{formatDateTime(segment.flight.scheduledDepartureUtc)}</Text>
+            <Text style={styles.segmentTime}>
+              {formatDateTime(segment.flight.scheduledDepartureUtc)}
+            </Text>
             {!segment.flight.verified && <Text style={styles.unverified}>Unverified schedule</Text>}
           </View>
         ))}
@@ -47,7 +50,7 @@ export function JourneyCard({ journey, onPress }: { journey: Journey; onPress: (
 }
 
 const styles = StyleSheet.create({
-  card: { marginBottom: spacing.md },
+  card: { marginBottom: spacing.md, backgroundColor: colors.glassSurfaceStrongMatch },
   route: { ...typography.title, color: colors.textPrimary, marginBottom: spacing.xs },
   hiddenBadge: { ...typography.caption, color: colors.warning, marginBottom: spacing.sm },
   segmentRow: {
