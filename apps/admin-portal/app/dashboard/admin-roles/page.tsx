@@ -17,6 +17,12 @@ export default function AdminRolesPage() {
   const [grantRole, setGrantRole] = useState<AdminRole>('MODERATOR');
   const [error, setError] = useState<string | undefined>();
 
+  const [newEmail, setNewEmail] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [newRole, setNewRole] = useState<AdminRole>('MODERATOR');
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | undefined>();
+
   const refresh = () => {
     api.get<AdminAccount[]>('/admin-accounts').then(setAdmins);
   };
@@ -45,6 +51,22 @@ export default function AdminRolesPage() {
       refresh();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not update role');
+    }
+  };
+
+  const createAccount = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCreateError(undefined);
+    setCreating(true);
+    try {
+      await api.post('/admin-accounts', { email: newEmail, password: newPassword, role: newRole });
+      setNewEmail('');
+      setNewPassword('');
+      refresh();
+    } catch (err) {
+      setCreateError(err instanceof ApiError ? err.message : 'Could not create this account');
+    } finally {
+      setCreating(false);
     }
   };
 
@@ -99,8 +121,50 @@ export default function AdminRolesPage() {
       )}
 
       {isSuperAdmin && (
+        <form onSubmit={createAccount} className="mb-6 rounded-xl border border-border bg-surface p-5">
+          <h3 className="mb-3 text-sm font-semibold text-navy-900">Create admin account</h3>
+          <p className="mb-3 text-xs text-slate-500">For someone who doesn&apos;t have a Layo account yet — creates it pre-confirmed, already an admin.</p>
+          <div className="flex flex-wrap gap-2">
+            <input
+              type="email"
+              value={newEmail}
+              onChange={(e) => setNewEmail(e.target.value)}
+              placeholder="Email"
+              className="input flex-1 min-w-[200px]"
+              required
+            />
+            <input
+              type="password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              placeholder="Temporary password (min 8 characters)"
+              minLength={8}
+              className="input flex-1 min-w-[200px]"
+              required
+            />
+            <select value={newRole} onChange={(e) => setNewRole(e.target.value as AdminRole)} className="input w-44">
+              {ROLES.map((r) => (
+                <option key={r} value={r}>
+                  {r}
+                </option>
+              ))}
+            </select>
+            <button
+              type="submit"
+              disabled={creating}
+              className="rounded-lg bg-navy-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+            >
+              {creating ? 'Creating…' : 'Create account'}
+            </button>
+          </div>
+          {createError && <p className="mt-2 text-sm text-red-600">{createError}</p>}
+        </form>
+      )}
+
+      {isSuperAdmin && (
         <div className="rounded-xl border border-border bg-surface p-5">
           <h3 className="mb-3 text-sm font-semibold text-navy-900">Grant admin access</h3>
+          <p className="mb-3 text-xs text-slate-500">For someone who already has a Layo account — search and promote them.</p>
           <div className="flex gap-2">
             <input
               value={search}

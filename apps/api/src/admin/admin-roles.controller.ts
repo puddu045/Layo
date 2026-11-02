@@ -1,5 +1,11 @@
-import { Body, Controller, Get, Param, Patch, UseGuards } from '@nestjs/common';
-import { setAdminRoleRequestSchema, type SetAdminRoleRequest } from '@layo/contracts';
+import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
+import {
+  createAdminAccountRequestSchema,
+  setAdminRoleRequestSchema,
+  type CreateAdminAccountRequest,
+  type SetAdminRoleRequest,
+} from '@layo/contracts';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { RequestUser } from '../common/guards/supabase-auth.guard';
@@ -17,6 +23,16 @@ export class AdminRolesController {
   @Get()
   list() {
     return this.adminRolesService.list();
+  }
+
+  @Post()
+  @UseGuards(RoleGuard('SUPER_ADMIN'))
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  createAccount(
+    @CurrentUser() admin: RequestUser,
+    @Body(new ZodValidationPipe(createAdminAccountRequestSchema)) dto: CreateAdminAccountRequest,
+  ) {
+    return this.adminRolesService.createAccount(admin.id, dto);
   }
 
   @Patch(':userId/role')

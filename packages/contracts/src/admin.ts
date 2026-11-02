@@ -13,6 +13,13 @@ export const setAdminRoleRequestSchema = z.object({
 });
 export type SetAdminRoleRequest = z.infer<typeof setAdminRoleRequestSchema>;
 
+export const createAdminAccountRequestSchema = z.object({
+  email: z.string().trim().toLowerCase().email(),
+  password: z.string().min(8, 'Password must be at least 8 characters'),
+  role: adminRoleSchema,
+});
+export type CreateAdminAccountRequest = z.infer<typeof createAdminAccountRequestSchema>;
+
 export const adminAccountSchema = z.object({
   id: z.string().uuid(),
   email: z.string().email(),
