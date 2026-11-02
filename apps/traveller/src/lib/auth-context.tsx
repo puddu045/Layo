@@ -38,6 +38,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
       setHasProfile(me.hasProfile);
       setProfileError(null);
     } catch (err) {
+      // api-client already signs out on a 401 (see its comment) before this error reaches here,
+      // so by this point a 401 is already on its way to becoming `!session` — this still sets a
+      // message for the brief moment before that takes effect, which is harmless.
       setHasProfile(null);
       setProfileError(err instanceof Error ? err.message : 'Could not reach the server');
     }

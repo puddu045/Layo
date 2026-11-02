@@ -1,14 +1,41 @@
 import { useEffect } from 'react';
-import { Stack } from 'expo-router';
+import { Stack, useRouter, useSegments } from 'expo-router';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import { useFonts, LobsterTwo_700Bold_Italic } from '@expo-google-fonts/lobster-two';
 import { queryClient } from '../src/lib/query-client';
-import { AuthProvider } from '../src/lib/auth-context';
+import { AuthProvider, useAuth } from '../src/lib/auth-context';
 import { colors } from '../src/theme/tokens';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
+
+/**
+ * The root `/` route (index.tsx) already redirects to welcome when there's no session, but that
+ * only runs when you land there. If a session dies later — API calls start 401ing (see
+ * api-client.ts) and sign out — while you're already on some other screen, nothing was sending
+ * you back to a login screen; every screen just showed its own dead-end "could not load" error.
+ * This mirrors index.tsx's redirect for every other route instead of only the first one.
+ */
+function SessionGuard() {
+  const { session, loading } = useAuth();
+  const segments = useSegments();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (loading) return;
+    // Empty segments is the root `/` route, which handles its own redirect; leave it alone here
+    // to avoid a second, racing one. Cast away expo-router's generated tuple type, which (per the
+    // app's current routes) doesn't account for that empty-array case at the type level.
+    if ((segments as string[]).length === 0) return;
+    const inAuthGroup = segments[0] === '(auth)';
+    if (!session && !inAuthGroup) {
+      router.replace('/(auth)/welcome');
+    }
+  }, [session, loading, segments, router]);
+
+  return null;
+}
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({ LobsterTwo_700Bold_Italic });
@@ -22,6 +49,7 @@ export default function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
+        <SessionGuard />
         <StatusBar style="dark" />
         <Stack
           screenOptions={{

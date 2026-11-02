@@ -30,6 +30,14 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const body = isJson ? await response.json().catch(() => undefined) : undefined;
 
   if (!response.ok) {
+    // A 401 means whatever session this request carried (or lack of one) isn't valid anymore.
+    // Every screen's API calls go through here, so handling it in this one place means any
+    // screen's session dying gets the same recovery — not just the initial profile check.
+    // Signing out updates auth-context's `session`, and the root layout's session guard then
+    // redirects away from wherever the user currently is.
+    if (response.status === 401) {
+      await supabase.auth.signOut();
+    }
     throw new ApiError(body?.message ?? `Request failed with status ${response.status}`, response.status, body?.issues);
   }
 
