@@ -3,7 +3,8 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
-import { useFonts, LobsterTwo_700Bold_Italic } from '@expo-google-fonts/lobster-two';
+import { useFonts } from 'expo-font';
+import { Pacifico_400Regular } from '@expo-google-fonts/pacifico';
 import { queryClient } from '../src/lib/query-client';
 import { AuthProvider, useAuth } from '../src/lib/auth-context';
 import { colors } from '../src/theme/tokens';
@@ -38,7 +39,7 @@ function SessionGuard() {
 }
 
 export default function RootLayout() {
-  const [fontsLoaded] = useFonts({ LobsterTwo_700Bold_Italic });
+  const [fontsLoaded] = useFonts({ Pacifico_400Regular });
 
   useEffect(() => {
     if (fontsLoaded) SplashScreen.hideAsync().catch(() => {});

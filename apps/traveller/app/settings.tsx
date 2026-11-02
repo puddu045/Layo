@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { updateProfileRequestSchema } from '@layo/contracts';
 import { ScreenContainer } from '../src/components/ScreenContainer';
@@ -96,8 +96,10 @@ export default function Settings() {
 
   return (
     <ScreenContainer>
-      <ScrollView contentContainerStyle={styles.scroll}>
-        <Text style={styles.sectionTitle}>Profile</Text>
+      {/* 'height' on Android, not undefined: see journeys/new.tsx for why. */}
+      <KeyboardAvoidingView style={styles.keyboardAvoider} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        <ScrollView contentContainerStyle={styles.scroll}>
+          <Text style={styles.sectionTitle}>Profile</Text>
         <TextField label="Display name" value={displayName} onChangeText={setDisplayName} />
         <TextField
           label="Bio"
@@ -142,12 +144,14 @@ export default function Settings() {
             router.replace('/(auth)/welcome');
           }}
         />
-      </ScrollView>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
+  keyboardAvoider: { flex: 1 },
   scroll: { paddingVertical: spacing.lg, paddingBottom: spacing.xxl },
   sectionTitle: { ...typography.subtitle, color: colors.textPrimary, marginBottom: spacing.sm },
   switchRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.lg },

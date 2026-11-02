@@ -53,6 +53,7 @@ model User {
   reportsResolved        Report[]                @relation("ReportResolvedBy")
   notifications          Notification[]
   auditLogEntries        AuditLog[]
+  identitiesBanned       BannedIdentity[]
 
   @@index([status])
 }
@@ -398,6 +399,18 @@ model Report {
   @@index([status])
 }
 
+/// A previously-banned account's email, checked at auth time (see SupabaseAuthGuard) so a
+/// banned user can't just sign up again with the same address. `bannedByAdminId` is null when
+/// the 10-distinct-reporter automation did the banning rather than a human admin action.
+model BannedIdentity {
+  id              String    @id @default(uuid())
+  email           String    @unique
+  reason          String?
+  bannedAt        DateTime  @default(now())
+  bannedByAdminId String?
+  bannedByAdmin   User?     @relation(fields: [bannedByAdminId], references: [id])
+}
+
 model Notification {
   id        String    @id @default(uuid())
   userId    String
@@ -412,8 +425,10 @@ model Notification {
 
 model AuditLog {
   id             String   @id @default(uuid())
-  actorAdminId   String
-  actorAdmin     User     @relation(fields: [actorAdminId], references: [id])
+  // Nullable: a null actor means an automated action (e.g. the 10-distinct-reporter auto-ban),
+  // not a human admin — still worth logging, just with no admin to attribute it to.
+  actorAdminId   String?
+  actorAdmin     User?    @relation(fields: [actorAdminId], references: [id])
   action         String
   targetType     String
   targetId       String

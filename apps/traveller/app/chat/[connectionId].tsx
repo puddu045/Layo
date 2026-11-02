@@ -11,9 +11,10 @@ import {
 } from 'react-native';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import type { Message } from '@layo/contracts';
+import type { Message, ReportReason } from '@layo/contracts';
 import { ScreenContainer } from '../../src/components/ScreenContainer';
 import { ErrorState, LoadingState } from '../../src/components/StateViews';
+import { ReportReasonSheet } from '../../src/components/ReportReasonSheet';
 import {
   useConnections,
   useMarkRead,
@@ -43,23 +44,30 @@ export default function ChatScreen() {
   const reportContent = useReportContent();
 
   const [draft, setDraft] = useState('');
+  const [reportSheetOpen, setReportSheetOpen] = useState(false);
 
   const onBlock = () => {
     if (!connection) return;
-    notifyConfirm(
-      `Block ${connection.otherProfile.displayName}?`,
-      "You won't see each other in Discover or be able to message anymore.",
-      () => {
-        blockUser.mutate(
-          connection.otherProfile.userId,
-          {
-            onSuccess: () => notifyInfo('Blocked', `${connection.otherProfile.displayName} has been blocked.`),
-            onError: (err) => notifyInfo('Could not block', err instanceof Error ? err.message : 'Please try again.'),
-          },
-        );
-      },
-      { confirmLabel: 'Block', destructive: true },
-    );
+    setReportSheetOpen(true);
+  };
+
+  const onConfirmBlock = (reason?: ReportReason) => {
+    if (!connection) return;
+    setReportSheetOpen(false);
+    const name = connection.otherProfile.displayName;
+    const userId = connection.otherProfile.userId;
+
+    blockUser.mutate(userId, {
+      onSuccess: () => notifyInfo('Blocked', `${name} has been blocked.`),
+      onError: (err) => notifyInfo('Could not block', err instanceof Error ? err.message : 'Please try again.'),
+    });
+
+    // A failed report shouldn't look like the block itself failed — it already succeeded above,
+    // independently — so this gets its own silent-ish failure rather than a second alert stacked
+    // on top of the block's own success message.
+    if (reason) {
+      reportContent.mutate({ reportedUserId: userId, reason });
+    }
   };
 
   const onUnblock = () => {
@@ -146,9 +154,13 @@ export default function ChatScreen() {
           onRetry={blockedByOther ? undefined : () => messages.refetch()}
         />
       ) : (
+        /* 'height' on Android, not undefined: this relied on windowSoftInputMode=adjustResize,
+           which the project never actually configures in app.json (and which Expo Go's prebuilt
+           manifest wouldn't pick up from app.json anyway) — 'height' handles it entirely in JS
+           via the Keyboard module instead, so it doesn't depend on any native manifest setting. */
         <KeyboardAvoidingView
           style={{ flex: 1 }}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           keyboardVerticalOffset={90}
         >
           <FlatList
@@ -199,6 +211,13 @@ export default function ChatScreen() {
           )}
         </KeyboardAvoidingView>
       )}
+
+      <ReportReasonSheet
+        visible={reportSheetOpen}
+        targetName={connection?.otherProfile.displayName ?? 'this traveller'}
+        onCancel={() => setReportSheetOpen(false)}
+        onConfirm={onConfirmBlock}
+      />
     </ScreenContainer>
   );
 }

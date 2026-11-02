@@ -51,6 +51,16 @@ export class SupabaseAuthGuard implements CanActivate {
       throw new UnauthorizedException('Invalid or expired session');
     }
 
+    // Checked before the upsert below, not after: a banned email re-signing up gets a brand new
+    // Supabase auth user id, so `user.status` on a freshly-created local row would still read
+    // ACTIVE — this is what actually stops them, by email, independent of that new id.
+    const banned = await this.prisma.client.bannedIdentity.findUnique({
+      where: { email: identity.email.toLowerCase() },
+    });
+    if (banned) {
+      throw new UnauthorizedException('This account is banned');
+    }
+
     const user = await this.prisma.client.user.upsert({
       where: { id: identity.id },
       create: { id: identity.id, email: identity.email },

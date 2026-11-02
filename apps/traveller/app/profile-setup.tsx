@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { createProfileRequestSchema } from '@layo/contracts';
 import { ScreenContainer } from '../src/components/ScreenContainer';
@@ -50,8 +50,10 @@ export default function ProfileSetup() {
 
   return (
     <ScreenContainer>
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        <Text style={styles.subtitle}>
+      {/* 'height' on Android, not undefined: see journeys/new.tsx for why. */}
+      <KeyboardAvoidingView style={styles.keyboardAvoider} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+          <Text style={styles.subtitle}>
           Tell other travellers a bit about yourself. Your date of birth is private — only your age is ever shown.
         </Text>
 
@@ -106,12 +108,14 @@ export default function ProfileSetup() {
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
         <Button label="Finish setup" onPress={onSubmit} loading={createProfile.isPending} />
-      </ScrollView>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
+  keyboardAvoider: { flex: 1 },
   scroll: { paddingVertical: spacing.lg, paddingBottom: spacing.xxl },
   subtitle: { ...typography.body, color: colors.textSecondary, marginBottom: spacing.lg },
   switchRow: {

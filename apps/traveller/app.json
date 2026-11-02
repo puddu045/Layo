@@ -21,7 +21,8 @@
       "adaptiveIcon": {
         "backgroundColor": "#0B2545"
       },
-      "package": "com.layo.traveller"
+      "package": "com.layo.traveller",
+      "softwareKeyboardLayoutMode": "pan"
     },
     "web": {
       "bundler": "metro",

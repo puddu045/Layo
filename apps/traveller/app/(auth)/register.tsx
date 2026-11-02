@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, StyleSheet, Text, View } from 'react-native';
 import { Link, router } from 'expo-router';
 import { signUpRequestSchema } from '@layo/contracts';
 import { ScreenContainer } from '../../src/components/ScreenContainer';
@@ -52,35 +52,38 @@ export default function Register() {
   }
 
   return (
-    <ScreenContainer style={styles.container}>
-      <Text style={styles.title}>Create your account</Text>
-      <Text style={styles.subtitle}>You must be 18 or older to use Layo.</Text>
+    <ScreenContainer>
+      {/* 'height' on Android, not undefined: see journeys/new.tsx for why. */}
+      <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        <Text style={styles.title}>Create your account</Text>
+        <Text style={styles.subtitle}>You must be 18 or older to use Layo.</Text>
 
-      <TextField
-        label="Email"
-        autoCapitalize="none"
-        keyboardType="email-address"
-        value={email}
-        onChangeText={setEmail}
-      />
-      <TextField label="Password" secureTextEntry value={password} onChangeText={setPassword} />
-      <TextField label="Confirm password" secureTextEntry value={confirmPassword} onChangeText={setConfirmPassword} />
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+        <TextField
+          label="Email"
+          autoCapitalize="none"
+          keyboardType="email-address"
+          value={email}
+          onChangeText={setEmail}
+        />
+        <TextField label="Password" secureTextEntry value={password} onChangeText={setPassword} />
+        <TextField label="Confirm password" secureTextEntry value={confirmPassword} onChangeText={setConfirmPassword} />
+        {error ? <Text style={styles.error}>{error}</Text> : null}
 
-      <Button label="Create account" onPress={onSubmit} loading={loading} />
+        <Button label="Create account" onPress={onSubmit} loading={loading} />
 
-      <View style={styles.footer}>
-        <Text style={styles.footerText}>Already have an account?</Text>
-        <Link href="/(auth)/login" style={styles.link}>
-          Sign in
-        </Link>
-      </View>
+        <View style={styles.footer}>
+          <Text style={styles.footerText}>Already have an account?</Text>
+          <Link href="/(auth)/login" style={styles.link}>
+            Sign in
+          </Link>
+        </View>
+      </KeyboardAvoidingView>
     </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { justifyContent: 'center' },
+  container: { flex: 1, justifyContent: 'center' },
   title: { ...typography.display, color: colors.navy900, marginBottom: spacing.xs },
   subtitle: { ...typography.body, color: colors.textSecondary, marginBottom: spacing.xl },
   error: { ...typography.caption, color: colors.danger, marginBottom: spacing.md },

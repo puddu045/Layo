@@ -202,7 +202,7 @@ export const radius = {
  * used for the "Layo" wordmark itself, not body text, to keep that one distinctive without
  * pulling a whole second typeface into every screen. */
 export const fonts = {
-  wordmark: 'LobsterTwo_700Bold_Italic',
+  wordmark: 'Pacifico_400Regular',
 };
 
 export const typography = {

@@ -4,6 +4,11 @@ const COLORS: Record<string, string> = {
   REJECTED: 'bg-red-100 text-red-700',
   SUSPENDED: 'bg-red-100 text-red-700',
   EXPIRED: 'bg-slate-200 text-slate-500',
+  // Report statuses
+  OPEN: 'bg-amber-100 text-amber-800',
+  REVIEWED: 'bg-blue-100 text-blue-700',
+  ACTIONED: 'bg-red-100 text-red-700',
+  DISMISSED: 'bg-slate-200 text-slate-500',
 };
 
 export function StatusBadge({ status }: { status: string }) {

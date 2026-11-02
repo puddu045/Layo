@@ -104,6 +104,21 @@ function HeroArt({ iconTranslate }: { iconTranslate: ReturnType<typeof getIconTr
   );
 }
 
+/** The "Layo" wordmark with a small coral heart accent tucked over the top-right — a
+ * hand-lettered logotype look rather than a plain styled label. No separate underline: Pacifico's
+ * own "y" already swings into a long tail/flourish, and a straight bar near it (tried at several
+ * positions) either overlapped the tagline below, merged invisibly into the glyph itself, or cut
+ * across that tail in a way that read as the logo being clipped rather than underlined — not
+ * worth it on top of a font that already has a flourish like this. */
+function Wordmark() {
+  return (
+    <View style={styles.wordmarkWrap}>
+      <Text style={styles.title}>{BRAND.name}</Text>
+      <Ionicons name="heart-outline" size={22} color={colors.coral} style={styles.wordmarkHeart} />
+    </View>
+  );
+}
+
 function getIconTranslate(flightIn: Animated.Value) {
   return {
     transform: [
@@ -244,7 +259,7 @@ export default function Welcome() {
                 above) rather than shrunk, below a height where even showing it alongside the
                 footer wouldn't fit. */}
             {showHeroArt && <HeroArt iconTranslate={iconTranslate} />}
-            <Text style={styles.title}>{BRAND.name}</Text>
+            <Wordmark />
             <Text style={styles.tagline}>{BRAND.tagline}</Text>
           </View>
 
@@ -293,7 +308,7 @@ export default function Welcome() {
           >
             <View style={styles.hero}>
               <HeroArt iconTranslate={iconTranslate} />
-              <Text style={styles.title}>{BRAND.name}</Text>
+              <Wordmark />
               <Text style={styles.tagline}>{BRAND.tagline}</Text>
             </View>
           </View>
@@ -303,7 +318,7 @@ export default function Welcome() {
             onLayout={(e: LayoutChangeEvent) => setCompactHeroHeight(e.nativeEvent.layout.height)}
           >
             <View style={styles.hero}>
-              <Text style={styles.title}>{BRAND.name}</Text>
+              <Wordmark />
               <Text style={styles.tagline}>{BRAND.tagline}</Text>
             </View>
           </View>
@@ -410,23 +425,40 @@ const styles = StyleSheet.create({
     left: -22,
     opacity: 0.6,
   },
-  // Script/italic fonts' loops and descenders overshoot a typical sans font's em-box on every
-  // side, not just top/bottom — generous line height and horizontal padding keep those strokes
-  // from clipping against the text's measured box.
+  // Wraps the wordmark text so the heart can be positioned relative to it rather than to the
+  // whole hero block.
+  wordmarkWrap: { alignItems: 'center' },
+  // Script fonts' loops and descenders overshoot a typical sans font's em-box on every side, not
+  // just top/bottom — generous line height and horizontal padding keep those strokes from
+  // clipping against the text's measured box, which native text rendering enforces more strictly
+  // than a web browser does for the same font. Pacifico's flourishes (the long "y" tail
+  // especially) are notably larger than either font this wordmark used before it, hence the
+  // generous padding here rather than the tighter values those needed.
   title: {
     fontFamily: fonts.wordmark,
-    fontSize: 48,
-    lineHeight: 82,
-    paddingVertical: spacing.xs,
+    fontSize: 60,
+    lineHeight: 92,
+    paddingVertical: spacing.sm,
     // Horizontal, not just paddingLeft, so the box stays symmetric and the text doesn't visibly
     // shift off-centre under the window above it.
-    paddingHorizontal: spacing.sm,
+    paddingHorizontal: spacing.lg,
     color: colors.primaryDark,
+  },
+  // Tucked over the top-right of the "o", tilted like a quick hand-drawn flourish rather than a
+  // neatly placed icon.
+  wordmarkHeart: {
+    position: 'absolute',
+    top: 16,
+    right: 20,
+    transform: [{ rotate: '18deg' }],
   },
   tagline: {
     ...typography.body,
     color: colors.textSecondary,
-    marginTop: spacing.xs,
+    // More than the usual spacing.xs — the underline stroke right above this sits close to the
+    // wordmark's own glyphs by design (a large negative marginTop, see wordmarkUnderline), which
+    // otherwise leaves almost no real gap before this text.
+    marginTop: spacing.md,
     marginBottom: spacing.md,
     textAlign: 'center',
   },

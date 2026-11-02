@@ -76,9 +76,10 @@ export default function AirportRoomScreen() {
           onRetry={() => messages.refetch()}
         />
       ) : (
+        /* 'height' on Android, not undefined: see chat/[connectionId].tsx for why. */
         <KeyboardAvoidingView
           style={{ flex: 1 }}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           keyboardVerticalOffset={90}
         >
           <FlatList

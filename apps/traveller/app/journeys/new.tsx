@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { flightLookupRequestSchema, manualFlightEntrySchema, type AddJourneySegmentRequest, type FlightCandidate } from '@layo/contracts';
 import { ScreenContainer } from '../../src/components/ScreenContainer';
@@ -124,7 +124,15 @@ export default function NewJourney() {
 
   return (
     <ScreenContainer>
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+      {/* 'height' on Android, not undefined: app.json sets softwareKeyboardLayoutMode to "pan"
+          (not the more common "resize") specifically so Android never tries to shrink the window
+          itself — that was the original plan here, but Expo Go's own prebuilt manifest can't pick
+          up app.json's native config at all, so it silently never took effect, and the keyboard
+          just sat on top of whatever was focused. Handling it entirely in JS via this behavior,
+          with native resize turned off, means it behaves the same in Expo Go, a dev client and a
+          production build instead of depending on which one happens to be running it. */}
+      <KeyboardAvoidingView style={styles.keyboardAvoider} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         {segments.length > 0 && (
           <View style={styles.segmentList}>
             {segments.map((s, i) => (
@@ -255,12 +263,14 @@ export default function NewJourney() {
           loading={createJourney.isPending}
           disabled={segments.length === 0}
         />
-      </ScrollView>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
+  keyboardAvoider: { flex: 1 },
   scroll: { paddingVertical: spacing.lg, paddingBottom: spacing.xxl, gap: spacing.md },
   sectionTitle: { ...typography.subtitle, color: colors.textPrimary, marginBottom: spacing.sm },
   error: { ...typography.caption, color: colors.danger, marginBottom: spacing.sm },

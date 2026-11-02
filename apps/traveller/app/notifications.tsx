@@ -55,6 +55,16 @@ function describe(n: Notification): { title: string; body: string; onPress?: () 
         body: status === 'APPROVED' ? 'Your deal is now live for travellers.' : `Your deal was rejected${reason}.`,
       };
     }
+    case 'REPORT_WARNING':
+      return {
+        title: 'Multiple people have reported you',
+        body: 'Please keep your behaviour respectful and appropriate. Further reports may lead to your account being suspended.',
+      };
+    case 'ACCOUNT_SUSPENDED':
+      return {
+        title: 'Your account has been suspended',
+        body: 'This follows multiple reports from other travellers. Contact support if you believe this is a mistake.',
+      };
     default:
       return { title: n.type, body: '' };
   }

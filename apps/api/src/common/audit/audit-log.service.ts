@@ -6,8 +6,10 @@ import { PrismaService } from '../prisma/prisma.service';
 export class AuditLogService {
   constructor(private readonly prisma: PrismaService) {}
 
+  /** `actorAdminId` is null for an automated action (e.g. the report-threshold auto-ban) — still
+   * worth logging, just with no admin to attribute it to. */
   async record(
-    actorAdminId: string,
+    actorAdminId: string | null,
     action: string,
     targetType: string,
     targetId: string,
