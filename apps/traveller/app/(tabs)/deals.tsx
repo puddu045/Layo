@@ -99,9 +99,9 @@ function DealCard({ deal }: { deal: Deal }) {
 
 const styles = StyleSheet.create({
   header: { paddingTop: spacing.md, paddingBottom: spacing.sm },
-  title: { ...typography.display, color: colors.navy900 },
+  title: { ...typography.display, color: colors.primaryDark },
   group: { marginBottom: spacing.lg },
-  groupTitle: { ...typography.label, color: colors.navy700, marginBottom: spacing.sm },
+  groupTitle: { ...typography.label, color: colors.primaryDark, marginBottom: spacing.sm },
   card: { marginBottom: spacing.md, backgroundColor: colors.glassSurfaceStrongMatch },
   cardTop: {
     flexDirection: 'row',

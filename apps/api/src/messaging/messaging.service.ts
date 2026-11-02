@@ -16,7 +16,15 @@ export class MessagingService {
   ) {}
 
   async list(userId: string, connectionId: string, query: ListMessagesQuery): Promise<PaginatedResponse<Message>> {
-    await this.connectionsService.requireAcceptedParticipant(userId, connectionId);
+    const connection = await this.connectionsService.requireAcceptedParticipant(userId, connectionId);
+
+    // Only the direction that matters here: if the *other* participant blocked this viewer, the
+    // viewer loses the conversation entirely. The reverse (the viewer did the blocking) still
+    // reads fine — a blocker keeps their own message history, they just can't send any more.
+    const otherParticipantId = connection.requesterId === userId ? connection.addresseeId : connection.requesterId;
+    if (await this.blocksService.isBlockedBy(otherParticipantId, userId)) {
+      throw new ForbiddenException('This conversation is no longer available');
+    }
 
     const [rows, total] = await Promise.all([
       this.prisma.client.message.findMany({

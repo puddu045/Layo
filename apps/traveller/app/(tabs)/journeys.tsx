@@ -14,7 +14,11 @@ export default function Journeys() {
     <ScreenContainer>
       <View style={styles.header}>
         <Text style={styles.title}>Journeys</Text>
-        <Pressable onPress={() => router.push('/journeys/new')} hitSlop={8} style={styles.addButton}>
+        <Pressable
+          onPress={() => router.push('/journeys/new')}
+          hitSlop={8}
+          style={styles.addButton}
+        >
           <Ionicons name="add" size={22} color={colors.white} />
         </Pressable>
       </View>
@@ -23,14 +27,18 @@ export default function Journeys() {
         <LoadingState label="Loading your journeys…" />
       ) : journeys.isError ? (
         <ErrorState
-          message={journeys.error instanceof Error ? journeys.error.message : 'Could not load journeys'}
+          message={
+            journeys.error instanceof Error ? journeys.error.message : 'Could not load journeys'
+          }
           onRetry={() => journeys.refetch()}
         />
       ) : journeys.data && journeys.data.length > 0 ? (
         <FlatList
           data={journeys.data}
           keyExtractor={(item) => item.id}
-          renderItem={({ item }) => <JourneyCard journey={item} onPress={() => router.push(`/journeys/${item.id}`)} />}
+          renderItem={({ item }) => (
+            <JourneyCard journey={item} onPress={() => router.push(`/journeys/${item.id}`)} />
+          )}
           contentContainerStyle={{ paddingBottom: spacing.xl }}
           // No pull-to-refresh: react-native-web has no real gesture for it, and on Android a
           // RefreshControl stuck mid-state (e.g. a background refetch) renders as a stray circle
@@ -56,12 +64,12 @@ const styles = StyleSheet.create({
     paddingTop: spacing.md,
     paddingBottom: spacing.md,
   },
-  title: { ...typography.display, color: colors.navy900 },
+  title: { ...typography.display, color: colors.primaryDark },
   addButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: colors.navy900,
+    backgroundColor: colors.primaryDark,
     alignItems: 'center',
     justifyContent: 'center',
   },

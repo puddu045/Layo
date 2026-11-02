@@ -61,6 +61,16 @@ export class BlocksService {
     return !!block;
   }
 
+  /** One direction only: did `blockerId` block `blockedId`? Used where the two directions mean
+   * different things — the blocker keeps read access to a conversation, the blocked party loses
+   * it entirely. */
+  async isBlockedBy(blockerId: string, blockedId: string): Promise<boolean> {
+    const block = await this.prisma.client.block.findUnique({
+      where: { blockerId_blockedId: { blockerId, blockedId } },
+    });
+    return !!block;
+  }
+
   /** Used by matching to filter many candidates against one user's blocks in a single query. */
   async getBlockedUserIdSet(userId: string): Promise<Set<string>> {
     const blocks = await this.prisma.client.block.findMany({

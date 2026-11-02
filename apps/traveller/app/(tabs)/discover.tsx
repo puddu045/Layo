@@ -37,7 +37,10 @@ export default function Discover() {
         );
       },
       onError: (err) => {
-        notifyInfo('Could not send request', err instanceof Error ? err.message : 'Please try again.');
+        notifyInfo(
+          'Could not send request',
+          err instanceof Error ? err.message : 'Please try again.',
+        );
       },
     });
   };
@@ -52,7 +55,9 @@ export default function Discover() {
               <Ionicons name="notifications-outline" size={24} color={colors.navy900} />
               {!!unreadCount.data && (
                 <View style={styles.badge}>
-                  <Text style={styles.badgeText}>{unreadCount.data > 9 ? '9+' : unreadCount.data}</Text>
+                  <Text style={styles.badgeText}>
+                    {unreadCount.data > 9 ? '9+' : unreadCount.data}
+                  </Text>
                 </View>
               )}
             </Pressable>
@@ -72,7 +77,9 @@ export default function Discover() {
             onPress={() => setCategory(f.value)}
             style={[styles.filterChip, category === f.value && styles.filterChipActive]}
           >
-            <Text style={[styles.filterLabel, category === f.value && styles.filterLabelActive]}>{f.label}</Text>
+            <Text style={[styles.filterLabel, category === f.value && styles.filterLabelActive]}>
+              {f.label}
+            </Text>
           </Pressable>
         ))}
       </View>
@@ -81,7 +88,9 @@ export default function Discover() {
         <LoadingState label="Finding travellers near you…" />
       ) : discover.isError ? (
         <ErrorState
-          message={discover.error instanceof Error ? discover.error.message : 'Could not load matches'}
+          message={
+            discover.error instanceof Error ? discover.error.message : 'Could not load matches'
+          }
           onRetry={() => discover.refetch()}
         />
       ) : !journeys.data || journeys.data.length === 0 ? (
@@ -95,7 +104,9 @@ export default function Discover() {
         <FlatList
           data={discover.data.items}
           keyExtractor={(item, index) => `${item.category}-${item.profile.userId}-${index}`}
-          renderItem={({ item }) => <MatchCard match={item} onConnect={() => onConnect(item.profile.userId)} />}
+          renderItem={({ item }) => (
+            <MatchCard match={item} onConnect={() => onConnect(item.profile.userId)} />
+          )}
           contentContainerStyle={{ paddingBottom: spacing.xl }}
           // No pull-to-refresh: react-native-web has no real gesture for it, and on Android a
           // RefreshControl stuck mid-state (e.g. a background refetch) renders as a stray circle
@@ -119,7 +130,7 @@ const styles = StyleSheet.create({
     paddingTop: spacing.md,
     paddingBottom: spacing.sm,
   },
-  title: { ...typography.display, color: colors.navy900 },
+  title: { ...typography.display, color: colors.primaryDark },
   headerIcons: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   iconButton: { position: 'relative' },
   badge: {
@@ -145,7 +156,7 @@ const styles = StyleSheet.create({
     marginRight: spacing.xs,
     marginBottom: spacing.xs,
   },
-  filterChipActive: { backgroundColor: colors.navy900, borderColor: colors.navy900 },
+  filterChipActive: { backgroundColor: colors.primaryDark, borderColor: colors.navy900 },
   filterLabel: { ...typography.caption, color: colors.textSecondary, fontWeight: '600' },
   filterLabelActive: { color: colors.white },
 });

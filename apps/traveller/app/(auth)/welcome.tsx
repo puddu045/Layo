@@ -96,22 +96,30 @@ export default function Welcome() {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.hero}>
-            <LinearGradient
-              colors={gradients.hero}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.logoMark}
-            >
-              {/* A glossy top highlight and a soft wave under the plane — plain translucent
-                  shapes, clipped by the mark's own rounded corners, rather than pulling in an SVG
-                  library for two decorations. */}
-              <View style={styles.logoHighlight} />
-              <View style={styles.logoWave} />
-              <View style={[styles.logoWave, styles.logoWaveFaint]} />
-              <Animated.View style={iconTranslate}>
-                <Ionicons name="airplane" size={38} color={colors.white} />
-              </Animated.View>
-            </LinearGradient>
+            {/* An aircraft cabin window: a plastic bezel (frame), a thin shadowed gasket ring,
+                then a glass "pane" the plane's gradient sky fills, with a reflective highlight
+                and a cloud-like wave clipped to it. The ring is a background-colour layer, not a
+                border — a translucent border renders solid and dark on web instead of blending
+                softly the way it does natively, so nesting plain-coloured views is what keeps
+                this looking the same on every platform. */}
+            <View style={styles.windowFrame}>
+              <View style={styles.windowFrameHighlight} />
+              <View style={styles.windowRing}>
+                <LinearGradient
+                  colors={gradients.hero}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.windowPane}
+                >
+                  <View style={styles.logoHighlight} />
+                  <View style={styles.logoWave} />
+                  <View style={[styles.logoWave, styles.logoWaveFaint]} />
+                  <Animated.View style={iconTranslate}>
+                    <Ionicons name="airplane" size={32} color={colors.white} />
+                  </Animated.View>
+                </LinearGradient>
+              </View>
+            </View>
             <Text style={styles.title}>{BRAND.name}</Text>
             <Text style={styles.tagline}>{BRAND.tagline}</Text>
           </View>
@@ -172,38 +180,76 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.lg,
   },
   hero: { alignItems: 'center', marginTop: spacing.lg },
-  logoMark: {
-    width: 92,
-    height: 92,
-    borderRadius: 28,
+  // The frame is sized a touch taller than wide and very rounded — a square or a shallow
+  // rectangle reads as an icon tile, but this proportion and corner radius is what makes it
+  // read as a window rather than a badge.
+  windowFrame: {
+    width: 86,
+    height: 108,
+    borderRadius: 38,
+    // A warm off-white, not stark white — plastic, not paper — so the bezel reads as a
+    // moulded physical object instead of a flat cutout.
+    backgroundColor: '#FAF9FD',
+    padding: 7,
     alignItems: 'center',
     justifyContent: 'center',
-    // marginBottom: spacing.xs,
     overflow: 'hidden',
     ...shadow.card,
   },
+  // A soft light-catch on the bezel's own surface, top-left, the way curved plastic picks up
+  // light — gives the frame itself some dimension rather than reading as a flat ring.
+  windowFrameHighlight: {
+    position: 'absolute',
+    top: -20,
+    left: -16,
+    width: 70,
+    height: 50,
+    borderRadius: 35,
+    backgroundColor: 'rgba(255,255,255,0.85)',
+  },
+  // The gasket between the bezel and the glass — a background-colour layer, not a border.
+  // A translucent border renders solid and noticeably dark on web where native blends it
+  // softly against what's behind it, so this ring is implemented as plain nested views
+  // (frame → ring → pane) instead, which looks identical on every platform.
+  windowRing: {
+    width: 72,
+    height: 94,
+    borderRadius: 31,
+    backgroundColor: 'rgba(11, 37, 69, 0.16)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 2,
+  },
+  windowPane: {
+    width: 68,
+    height: 90,
+    borderRadius: 29,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
   logoHighlight: {
     position: 'absolute',
-    top: -36,
-    left: -24,
-    width: 110,
-    height: 110,
-    borderRadius: 55,
+    top: -28,
+    left: -18,
+    width: 86,
+    height: 86,
+    borderRadius: 43,
     backgroundColor: 'rgba(255,255,255,0.22)',
   },
   logoWave: {
     position: 'absolute',
-    bottom: -8,
-    left: -20,
-    width: 132,
-    height: 42,
-    borderRadius: 66,
+    bottom: -6,
+    left: -16,
+    width: 104,
+    height: 34,
+    borderRadius: 52,
     backgroundColor: 'rgba(255,255,255,0.3)',
     transform: [{ rotate: '-6deg' }],
   },
   logoWaveFaint: {
-    bottom: -20,
-    left: -30,
+    bottom: -14,
+    left: -22,
     opacity: 0.6,
   },
   // Script/italic fonts' loops and descenders overshoot a typical sans font's em-box on every
@@ -215,9 +261,9 @@ const styles = StyleSheet.create({
     lineHeight: 82,
     paddingVertical: spacing.xs,
     // Horizontal, not just paddingLeft, so the box stays symmetric and the text doesn't visibly
-    // shift off-centre under the logo mark above it.
+    // shift off-centre under the window above it.
     paddingHorizontal: spacing.sm,
-    color: colors.navy900,
+    color: colors.primaryDark,
   },
   tagline: {
     ...typography.body,

@@ -98,7 +98,7 @@ function RoomCard({ room }: { room: AirportRoomSummary }) {
 
 const styles = StyleSheet.create({
   header: { paddingTop: spacing.md, paddingBottom: spacing.sm },
-  title: { ...typography.display, color: colors.navy900 },
+  title: { ...typography.display, color: colors.primaryDark },
   card: { marginBottom: spacing.md, backgroundColor: colors.glassSurfaceStrongMatch },
   cardDisabled: { opacity: 0.6 },
   cardTop: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },

@@ -13,6 +13,18 @@ export function useBlockUser() {
   });
 }
 
+export function useUnblockUser() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (blockedUserId: string) => api.delete(`/blocks/${blockedUserId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['connections'] });
+      queryClient.invalidateQueries({ queryKey: ['discover'] });
+      queryClient.invalidateQueries({ queryKey: ['messages'] });
+    },
+  });
+}
+
 export function useReportContent() {
   return useMutation({
     mutationFn: (dto: CreateReportRequest) => api.post('/reports', dto),

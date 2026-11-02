@@ -14,6 +14,10 @@ interface AuthContextValue {
   session: Session | null;
   loading: boolean;
   hasProfile: boolean | null;
+  // Set only when the last /auth/me call failed — distinct from hasProfile === null, which also
+  // means "haven't checked yet". Without this, a down API (or any other fetch failure) looked
+  // identical to "still loading" and the profile screen spun forever with no way to retry.
+  profileError: string | null;
   refreshProfileStatus: () => Promise<void>;
   signUp: (email: string, password: string) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
@@ -26,13 +30,16 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [hasProfile, setHasProfile] = useState<boolean | null>(null);
+  const [profileError, setProfileError] = useState<string | null>(null);
 
   const refreshProfileStatus = async () => {
     try {
       const me = await api.get<AuthMeResponse>('/auth/me');
       setHasProfile(me.hasProfile);
-    } catch {
+      setProfileError(null);
+    } catch (err) {
       setHasProfile(null);
+      setProfileError(err instanceof Error ? err.message : 'Could not reach the server');
     }
   };
 
@@ -54,6 +61,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       refreshProfileStatus();
     } else {
       setHasProfile(null);
+      setProfileError(null);
     }
   }, [session?.user.id]);
 
@@ -62,6 +70,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       session,
       loading,
       hasProfile,
+      profileError,
       refreshProfileStatus,
       signUp: async (email, password) => {
         const { error } = await supabase.auth.signUp({ email, password });
@@ -75,7 +84,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
         await supabase.auth.signOut();
       },
     }),
-    [session, loading, hasProfile],
+    [session, loading, hasProfile, profileError],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

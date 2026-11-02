@@ -29,6 +29,10 @@ export const connectionSchema = z.object({
   otherProfile: publicProfileSchema,
   unreadCount: z.number().int(),
   lastMessage: connectionLastMessageSchema.optional(),
+  /** Did the viewer block the other participant? Only this direction is exposed — the viewer
+   * still has read access to the conversation when true. When the other participant blocked the
+   * viewer instead, the messages endpoint denies access outright rather than surfacing a flag. */
+  blockedByMe: z.boolean(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });

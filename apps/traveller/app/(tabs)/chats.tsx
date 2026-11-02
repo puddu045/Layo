@@ -168,7 +168,7 @@ function ConnectionRow({ connection }: { connection: Connection }) {
 const styles = StyleSheet.create({
   scroll: { paddingVertical: spacing.md, paddingBottom: spacing.xl },
   header: { paddingTop: spacing.md, paddingBottom: spacing.sm },
-  title: { ...typography.display, color: colors.navy900, marginBottom: spacing.md },
+  title: { ...typography.display, color: colors.primaryDark, marginBottom: spacing.md },
   section: { marginBottom: spacing.lg },
   sectionLabel: { ...typography.label, color: colors.textSecondary, marginBottom: spacing.sm },
   requestCard: { marginBottom: spacing.sm, backgroundColor: colors.glassSurfaceStrongMatch },
@@ -183,7 +183,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: radius.pill,
-    backgroundColor: colors.navy900,
+    backgroundColor: colors.primaryDark,
     alignItems: 'center',
     justifyContent: 'center',
   },

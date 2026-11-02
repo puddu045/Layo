@@ -169,7 +169,7 @@ export class ConnectionsService {
   ): Promise<Connection> {
     const otherUserId = row.requesterId === viewerId ? row.addresseeId : row.requesterId;
 
-    const [otherProfile, unreadCount, lastMessage] = await Promise.all([
+    const [otherProfile, unreadCount, lastMessage, blockedByMe] = await Promise.all([
       this.prisma.client.profile.findUnique({ where: { userId: otherUserId } }),
       this.prisma.client.message.count({
         where: { connectionId: row.id, senderId: { not: viewerId }, readAt: null },
@@ -178,6 +178,7 @@ export class ConnectionsService {
         where: { connectionId: row.id },
         orderBy: { createdAt: 'desc' },
       }),
+      this.blocksService.isBlockedBy(viewerId, otherUserId),
     ]);
 
     if (!otherProfile) {
@@ -192,6 +193,7 @@ export class ConnectionsService {
       addresseeId: row.addresseeId,
       otherProfile: toPublicProfile(otherProfile),
       unreadCount,
+      blockedByMe,
       lastMessage: lastMessage
         ? { body: lastMessage.body, senderId: lastMessage.senderId, createdAt: lastMessage.createdAt.toISOString() }
         : undefined,

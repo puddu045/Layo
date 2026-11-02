@@ -9,7 +9,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { Stack, router, useLocalSearchParams } from 'expo-router';
+import { Stack, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import type { Message } from '@layo/contracts';
 import { ScreenContainer } from '../../src/components/ScreenContainer';
@@ -21,8 +21,9 @@ import {
   useRealtimeMessages,
   useSendMessage,
 } from '../../src/hooks/chat-hooks';
-import { useBlockUser, useReportContent } from '../../src/hooks/safety-hooks';
+import { useBlockUser, useReportContent, useUnblockUser } from '../../src/hooks/safety-hooks';
 import { useAuth } from '../../src/lib/auth-context';
+import { ApiError } from '../../src/lib/api-client';
 import { notifyConfirm, notifyInfo } from '../../src/lib/notify';
 import { colors, radius, spacing, typography } from '../../src/theme/tokens';
 
@@ -38,6 +39,7 @@ export default function ChatScreen() {
   const sendMessage = useSendMessage(connectionId ?? '');
   const markRead = useMarkRead(connectionId ?? '');
   const blockUser = useBlockUser();
+  const unblockUser = useUnblockUser();
   const reportContent = useReportContent();
 
   const [draft, setDraft] = useState('');
@@ -51,16 +53,21 @@ export default function ChatScreen() {
         blockUser.mutate(
           connection.otherProfile.userId,
           {
-            onSuccess: () => {
-              notifyInfo('Blocked', `${connection.otherProfile.displayName} has been blocked.`);
-              router.back();
-            },
+            onSuccess: () => notifyInfo('Blocked', `${connection.otherProfile.displayName} has been blocked.`),
             onError: (err) => notifyInfo('Could not block', err instanceof Error ? err.message : 'Please try again.'),
           },
         );
       },
       { confirmLabel: 'Block', destructive: true },
     );
+  };
+
+  const onUnblock = () => {
+    if (!connection) return;
+    unblockUser.mutate(connection.otherProfile.userId, {
+      onSuccess: () => notifyInfo('Unblocked', `You can message ${connection.otherProfile.displayName} again.`),
+      onError: (err) => notifyInfo('Could not unblock', err instanceof Error ? err.message : 'Please try again.'),
+    });
   };
 
   const onReportMessage = (message: Message) => {
@@ -90,8 +97,19 @@ export default function ChatScreen() {
     const body = draft.trim();
     if (!body) return;
     setDraft('');
-    sendMessage.mutate(body);
+    sendMessage.mutate(body, {
+      // A block (by either side) makes send fail even though the composer was still showing —
+      // e.g. the other person blocked this viewer moments ago. Put the draft back so it isn't
+      // silently lost, and say so instead of the message just vanishing with no explanation.
+      onError: (err) => {
+        setDraft(body);
+        notifyInfo('Message not sent', err instanceof Error ? err.message : 'Please try again.');
+      },
+    });
   };
+
+  const blockedByOther = messages.error instanceof ApiError && messages.error.status === 403;
+  const blockedByMe = connection?.blockedByMe ?? false;
 
   return (
     <ScreenContainer style={{ paddingHorizontal: 0 }}>
@@ -99,8 +117,16 @@ export default function ChatScreen() {
         options={{
           title: connection?.otherProfile.displayName ?? 'Chat',
           headerRight: () => (
-            <Pressable onPress={onBlock} hitSlop={8} style={{ paddingHorizontal: spacing.xs }}>
-              <Ionicons name="shield-outline" size={22} color={colors.navy900} />
+            <Pressable
+              onPress={blockedByMe ? onUnblock : onBlock}
+              hitSlop={8}
+              style={{ paddingHorizontal: spacing.xs }}
+            >
+              <Ionicons
+                name={blockedByMe ? 'shield' : 'shield-outline'}
+                size={22}
+                color={blockedByMe ? colors.danger : colors.navy900}
+              />
             </Pressable>
           ),
         }}
@@ -110,8 +136,14 @@ export default function ChatScreen() {
         <LoadingState label="Loading messages…" />
       ) : messages.isError ? (
         <ErrorState
-          message={messages.error instanceof Error ? messages.error.message : 'Could not load messages'}
-          onRetry={() => messages.refetch()}
+          message={
+            blockedByOther
+              ? 'This conversation is no longer available.'
+              : messages.error instanceof Error
+                ? messages.error.message
+                : 'Could not load messages'
+          }
+          onRetry={blockedByOther ? undefined : () => messages.refetch()}
         />
       ) : (
         <KeyboardAvoidingView
@@ -136,23 +168,35 @@ export default function ChatScreen() {
             }
           />
 
-          <View style={styles.inputBar}>
-            <TextInput
-              style={styles.input}
-              value={draft}
-              onChangeText={setDraft}
-              placeholder="Message…"
-              placeholderTextColor={colors.textSecondary}
-              multiline
-            />
-            <Pressable
-              style={[styles.sendButton, !draft.trim() && styles.sendButtonDisabled]}
-              onPress={onSend}
-              disabled={!draft.trim() || sendMessage.isPending}
-            >
-              <Ionicons name="airplane" size={18} color={colors.white} style={styles.sendIcon} />
-            </Pressable>
-          </View>
+          {blockedByMe ? (
+            <View style={styles.blockedBar}>
+              <Ionicons name="shield" size={18} color={colors.danger} />
+              <Text style={styles.blockedText}>
+                You&apos;ve blocked {connection?.otherProfile.displayName}.
+              </Text>
+              <Pressable onPress={onUnblock} hitSlop={8}>
+                <Text style={styles.blockedAction}>Unblock</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <View style={styles.inputBar}>
+              <TextInput
+                style={styles.input}
+                value={draft}
+                onChangeText={setDraft}
+                placeholder="Message…"
+                placeholderTextColor={colors.textSecondary}
+                multiline
+              />
+              <Pressable
+                style={[styles.sendButton, !draft.trim() && styles.sendButtonDisabled]}
+                onPress={onSend}
+                disabled={!draft.trim() || sendMessage.isPending}
+              >
+                <Ionicons name="airplane" size={18} color={colors.white} style={styles.sendIcon} />
+              </Pressable>
+            </View>
+          )}
         </KeyboardAvoidingView>
       )}
     </ScreenContainer>
@@ -200,6 +244,18 @@ const styles = StyleSheet.create({
   bubbleText: { ...typography.body, color: colors.textPrimary },
   bubbleTextMine: { color: colors.white },
   bubbleTime: { ...typography.caption, color: colors.textSecondary, marginTop: 2 },
+  blockedBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    backgroundColor: colors.surface,
+    gap: spacing.sm,
+  },
+  blockedText: { ...typography.body, color: colors.textSecondary, flex: 1 },
+  blockedAction: { ...typography.body, color: colors.primary, fontWeight: '600' },
   inputBar: {
     flexDirection: 'row',
     alignItems: 'flex-end',
