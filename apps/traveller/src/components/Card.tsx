@@ -3,14 +3,8 @@ import { colors, radius, shadow, spacing } from '../theme/tokens';
 
 /**
  * The default surface for everything from match cards to deal cards: a
- * translucent "glass" panel over `GlassBackground`'s colour wash — a tinted
- * white fill with a hairline highlight border and a soft shadow.
- *
- * Deliberately not a real BlurView: `expo-blur` on Android doesn't reliably
- * blur the content behind it inside this nav stack (it rendered as a flat,
- * sharp-edged box instead of a soft frosted panel — worse than no blur), so
- * a plain translucent tint is the version that actually looks right on every
- * platform rather than the version that looks best in theory on one.
+ * solid white panel over the app's pastel-blue background wash, with a
+ * hairline border and a subtle shadow for lift.
  */
 export function Card({ style, children, ...rest }: ViewProps) {
   return (
@@ -22,10 +16,10 @@ export function Card({ style, children, ...rest }: ViewProps) {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: colors.glassSurfaceStrong,
+    backgroundColor: colors.surface,
     borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: colors.glassBorder,
+    borderColor: colors.border,
     padding: spacing.lg,
     ...shadow.card,
   },

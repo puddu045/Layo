@@ -77,7 +77,7 @@ const styles = StyleSheet.create({
 });
 
 const variantStyles = StyleSheet.create({
-  secondary: { backgroundColor: colors.glassSurfaceStrong, borderWidth: 1, borderColor: colors.glassBorder },
+  secondary: { backgroundColor: colors.primaryTint, borderWidth: 1, borderColor: colors.primaryLight },
   ghost: { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: colors.primary },
   danger: { backgroundColor: colors.danger },
 });

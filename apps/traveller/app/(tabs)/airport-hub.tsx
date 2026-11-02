@@ -26,6 +26,7 @@ export default function AirportHub() {
     <ScreenContainer>
       <View style={styles.header}>
         <Text style={styles.title}>Airport Hub</Text>
+        <Text style={styles.subtitle}>Airport chats, updates and tips</Text>
       </View>
 
       {rooms.isLoading ? (
@@ -99,7 +100,8 @@ function RoomCard({ room }: { room: AirportRoomSummary }) {
 const styles = StyleSheet.create({
   header: { paddingTop: spacing.md, paddingBottom: spacing.sm },
   title: { ...typography.display, color: colors.primaryDark },
-  card: { marginBottom: spacing.md, backgroundColor: colors.glassSurfaceStrongMatch },
+  subtitle: { ...typography.caption, color: colors.textSecondary, marginTop: 2 },
+  card: { marginBottom: spacing.md },
   cardDisabled: { opacity: 0.6 },
   cardTop: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   iataBadge: {

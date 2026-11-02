@@ -13,7 +13,10 @@ export default function Journeys() {
   return (
     <ScreenContainer>
       <View style={styles.header}>
-        <Text style={styles.title}>Journeys</Text>
+        <View>
+          <Text style={styles.title}>Journeys</Text>
+          <Text style={styles.subtitle}>Your upcoming and planned trips</Text>
+        </View>
         <Pressable
           onPress={() => router.push('/journeys/new')}
           hitSlop={8}
@@ -65,6 +68,7 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.md,
   },
   title: { ...typography.display, color: colors.primaryDark },
+  subtitle: { ...typography.caption, color: colors.textSecondary, marginTop: 2 },
   addButton: {
     width: 40,
     height: 40,

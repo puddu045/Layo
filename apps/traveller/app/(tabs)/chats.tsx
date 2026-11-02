@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import type { Connection } from '@layo/contracts';
@@ -13,6 +14,8 @@ import {
 } from '../../src/hooks/chat-hooks';
 import { colors, radius, spacing, typography } from '../../src/theme/tokens';
 
+type Tab = 'messages' | 'requests';
+
 function formatTime(iso: string): string {
   const date = new Date(iso);
   const now = new Date();
@@ -24,6 +27,7 @@ function formatTime(iso: string): string {
 
 export default function Chats() {
   useRealtimeMessages();
+  const [tab, setTab] = useState<Tab>('messages');
 
   const connections = useConnections();
   const acceptConnection = useAcceptConnection();
@@ -62,6 +66,7 @@ export default function Chats() {
       <ScreenContainer>
         <View style={styles.header}>
           <Text style={styles.title}>Chats</Text>
+          <Text style={styles.subtitle}>Your conversations and connection requests</Text>
         </View>
         <EmptyState
           title="No connections yet"
@@ -75,12 +80,31 @@ export default function Chats() {
 
   return (
     <ScreenContainer>
-      <ScrollView contentContainerStyle={styles.scroll}>
+      <View style={styles.header}>
         <Text style={styles.title}>Chats</Text>
+        <Text style={styles.subtitle}>Your conversations and connection requests</Text>
+      </View>
 
-        {requests.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Requests</Text>
+      <View style={styles.tabs}>
+        <TabButton label="Messages" active={tab === 'messages'} onPress={() => setTab('messages')} />
+        <TabButton
+          label="Requests"
+          count={requests.length}
+          active={tab === 'requests'}
+          onPress={() => setTab('requests')}
+        />
+      </View>
+
+      <ScrollView contentContainerStyle={styles.scroll}>
+        {tab === 'messages' &&
+          (accepted.length > 0 ? (
+            accepted.map((c) => <ConnectionRow key={c.id} connection={c} />)
+          ) : (
+            <Text style={styles.emptyTabText}>No conversations yet — accept a request to start chatting.</Text>
+          ))}
+
+        {tab === 'requests' && (
+          <>
             {requests.map((c) => (
               <Card key={c.id} style={styles.requestCard}>
                 <Text style={styles.name}>
@@ -107,31 +131,49 @@ export default function Chats() {
                 </View>
               </Card>
             ))}
-          </View>
-        )}
 
-        {accepted.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Messages</Text>
-            {accepted.map((c) => (
-              <ConnectionRow key={c.id} connection={c} />
-            ))}
-          </View>
-        )}
+            {sent.length > 0 && (
+              <>
+                <Text style={styles.sectionLabel}>Sent</Text>
+                {sent.map((c) => (
+                  <Card key={c.id} style={styles.requestCard}>
+                    <Text style={styles.name}>{c.otherProfile.displayName}</Text>
+                    <Text style={styles.bio}>Waiting for them to respond</Text>
+                  </Card>
+                ))}
+              </>
+            )}
 
-        {sent.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Sent requests</Text>
-            {sent.map((c) => (
-              <Card key={c.id} style={styles.requestCard}>
-                <Text style={styles.name}>{c.otherProfile.displayName}</Text>
-                <Text style={styles.bio}>Waiting for them to respond</Text>
-              </Card>
-            ))}
-          </View>
+            {requests.length === 0 && sent.length === 0 && (
+              <Text style={styles.emptyTabText}>No pending requests.</Text>
+            )}
+          </>
         )}
       </ScrollView>
     </ScreenContainer>
+  );
+}
+
+function TabButton({
+  label,
+  count,
+  active,
+  onPress,
+}: {
+  label: string;
+  count?: number;
+  active: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable onPress={onPress} style={[styles.tabButton, active && styles.tabButtonActive]}>
+      <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>{label}</Text>
+      {!!count && (
+        <View style={[styles.tabCount, active && styles.tabCountActive]}>
+          <Text style={[styles.tabCountText, active && styles.tabCountTextActive]}>{count}</Text>
+        </View>
+      )}
+    </Pressable>
   );
 }
 
@@ -166,12 +208,44 @@ function ConnectionRow({ connection }: { connection: Connection }) {
 }
 
 const styles = StyleSheet.create({
-  scroll: { paddingVertical: spacing.md, paddingBottom: spacing.xl },
+  scroll: { paddingVertical: spacing.sm, paddingBottom: spacing.xl },
   header: { paddingTop: spacing.md, paddingBottom: spacing.sm },
-  title: { ...typography.display, color: colors.primaryDark, marginBottom: spacing.md },
-  section: { marginBottom: spacing.lg },
-  sectionLabel: { ...typography.label, color: colors.textSecondary, marginBottom: spacing.sm },
-  requestCard: { marginBottom: spacing.sm, backgroundColor: colors.glassSurfaceStrongMatch },
+  title: { ...typography.display, color: colors.primaryDark },
+  subtitle: { ...typography.caption, color: colors.textSecondary, marginTop: 2 },
+  tabs: {
+    flexDirection: 'row',
+    backgroundColor: colors.primaryTint,
+    borderRadius: radius.pill,
+    padding: 4,
+    marginTop: spacing.sm,
+  },
+  tabButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.pill,
+  },
+  tabButtonActive: { backgroundColor: colors.primary },
+  tabLabel: { ...typography.body, color: colors.navy700, fontWeight: '600' },
+  tabLabelActive: { color: colors.white },
+  tabCount: {
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 5,
+  },
+  tabCountActive: { backgroundColor: colors.white },
+  tabCountText: { color: colors.white, fontSize: 11, fontWeight: '700' },
+  tabCountTextActive: { color: colors.primary },
+  emptyTabText: { ...typography.body, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.xl },
+  sectionLabel: { ...typography.label, color: colors.textSecondary, marginTop: spacing.md, marginBottom: spacing.sm },
+  requestCard: { marginBottom: spacing.sm },
   requestActions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
   rowCard: {
     flexDirection: 'row',

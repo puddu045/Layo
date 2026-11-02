@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import type { MatchCategory } from '@layo/contracts';
 import { ScreenContainer } from '../../src/components/ScreenContainer';
 import { MatchCard } from '../../src/components/MatchCard';
+import { Chip } from '../../src/components/Chip';
 import { EmptyState, ErrorState, LoadingState } from '../../src/components/StateViews';
 import { useDiscover, useJourneys } from '../../src/hooks/api-hooks';
 import { useCreateConnection } from '../../src/hooks/chat-hooks';
@@ -12,11 +13,11 @@ import { useUnreadNotificationsCount } from '../../src/hooks/notification-hooks'
 import { notifyInfo } from '../../src/lib/notify';
 import { colors, spacing, typography } from '../../src/theme/tokens';
 
-const FILTERS: Array<{ label: string; value: MatchCategory | undefined }> = [
-  { label: 'All', value: undefined },
-  { label: 'Same flight', value: 'SAME_FLIGHT' },
-  { label: 'Departure airport', value: 'SAME_DEPARTURE_AIRPORT' },
-  { label: 'Layover', value: 'SAME_LAYOVER_AIRPORT' },
+const FILTERS: Array<{ label: string; value: MatchCategory | undefined; icon: keyof typeof Ionicons.glyphMap }> = [
+  { label: 'All', value: undefined, icon: 'apps-outline' },
+  { label: 'Same flight', value: 'SAME_FLIGHT', icon: 'airplane-outline' },
+  { label: 'Departure airport', value: 'SAME_DEPARTURE_AIRPORT', icon: 'location-outline' },
+  { label: 'Layover', value: 'SAME_LAYOVER_AIRPORT', icon: 'swap-horizontal-outline' },
 ];
 
 export default function Discover() {
@@ -48,11 +49,17 @@ export default function Discover() {
   return (
     <ScreenContainer>
       <View style={styles.header}>
-        <Text style={styles.title}>Discover</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.title}>Discover</Text>
+          <View style={styles.subtitleRow}>
+            <Ionicons name="people-outline" size={14} color={colors.primary} />
+            <Text style={styles.subtitle}>Find travellers around your journey</Text>
+          </View>
+        </View>
         <View style={styles.headerIcons}>
           <Link href="/notifications" asChild>
             <Pressable hitSlop={8} style={styles.iconButton}>
-              <Ionicons name="notifications-outline" size={24} color={colors.navy900} />
+              <Ionicons name="notifications-outline" size={22} color={colors.navy900} />
               {!!unreadCount.data && (
                 <View style={styles.badge}>
                   <Text style={styles.badgeText}>
@@ -64,7 +71,7 @@ export default function Discover() {
           </Link>
           <Link href="/settings" asChild>
             <Pressable hitSlop={8}>
-              <Ionicons name="settings-outline" size={24} color={colors.navy900} />
+              <Ionicons name="settings-outline" size={22} color={colors.navy900} />
             </Pressable>
           </Link>
         </View>
@@ -72,15 +79,13 @@ export default function Discover() {
 
       <View style={styles.filters}>
         {FILTERS.map((f) => (
-          <Pressable
+          <Chip
             key={f.label}
+            label={f.label}
+            icon={f.icon}
+            selected={category === f.value}
             onPress={() => setCategory(f.value)}
-            style={[styles.filterChip, category === f.value && styles.filterChipActive]}
-          >
-            <Text style={[styles.filterLabel, category === f.value && styles.filterLabelActive]}>
-              {f.label}
-            </Text>
-          </Pressable>
+          />
         ))}
       </View>
 
@@ -131,6 +136,8 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.sm,
   },
   title: { ...typography.display, color: colors.primaryDark },
+  subtitleRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
+  subtitle: { ...typography.caption, color: colors.textSecondary },
   headerIcons: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   iconButton: { position: 'relative' },
   badge: {
@@ -147,16 +154,4 @@ const styles = StyleSheet.create({
   },
   badgeText: { color: '#FFFFFF', fontSize: 10, fontWeight: '700' },
   filters: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: spacing.md },
-  filterChip: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginRight: spacing.xs,
-    marginBottom: spacing.xs,
-  },
-  filterChipActive: { backgroundColor: colors.primaryDark, borderColor: colors.navy900 },
-  filterLabel: { ...typography.caption, color: colors.textSecondary, fontWeight: '600' },
-  filterLabelActive: { color: colors.white },
 });
