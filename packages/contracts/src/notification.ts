@@ -8,6 +8,15 @@ export const notificationTypeSchema = z.enum([
   'CONNECTION_ACCEPTED',
   'BUSINESS_STATUS_CHANGED',
   'DEAL_STATUS_CHANGED',
+  'REPORT_WARNING',
+  'ACCOUNT_SUSPENDED',
+  'ACCOUNT_REINSTATED',
+  'ACCOUNT_VERIFIED',
+  'ANNOUNCEMENT',
+  'SUPPORT_REPLY',
+  'APPEAL_RESOLVED',
+  'ROOM_MUTED',
+  'REPORT_ESCALATED',
 ]);
 export type NotificationType = z.infer<typeof notificationTypeSchema>;
 

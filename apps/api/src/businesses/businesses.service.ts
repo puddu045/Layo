@@ -3,6 +3,7 @@ import { BusinessStatus } from '@layo/db';
 import type { Business, RegisterBusinessRequest } from '@layo/contracts';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { AuditLogService } from '../common/audit/audit-log.service';
+import { SettingsService } from '../common/settings/settings.service';
 import { toBusiness } from '../common/mappers/business.mapper';
 import { NotificationsService } from '../notifications/notifications.service';
 import { nextBusinessStatus, type BusinessStatusAction } from './business-status.util';
@@ -13,9 +14,15 @@ export class BusinessesService {
     private readonly prisma: PrismaService,
     private readonly notificationsService: NotificationsService,
     private readonly auditLogService: AuditLogService,
+    private readonly settingsService: SettingsService,
   ) {}
 
   async register(userId: string, dto: RegisterBusinessRequest): Promise<Business> {
+    const { businessSelfSignup } = await this.settingsService.getCategory('featureFlags');
+    if (!businessSelfSignup) {
+      throw new ForbiddenException('Business registration is temporarily closed');
+    }
+
     const airport = await this.prisma.client.airport.findUnique({ where: { iataCode: dto.airportIata } });
     if (!airport) throw new BadRequestException('Unknown airport');
 

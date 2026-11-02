@@ -10,9 +10,17 @@ import { supabaseBrowser } from '../../lib/supabase-browser';
 
 const NAV_ITEMS = [
   { label: 'Overview', href: '/dashboard' },
-  { label: 'Deals', href: '/dashboard/deals' },
+  { label: 'Users', href: '/dashboard/users' },
+  { label: 'Flights & Journeys', href: '/dashboard/journeys' },
+  { label: 'Airport Chats', href: '/dashboard/airport-chats' },
+  { label: 'Reports & Safety', href: '/dashboard/reports' },
   { label: 'Businesses', href: '/dashboard/businesses' },
-  { label: 'Reports', href: '/dashboard/reports' },
+  { label: 'Deals', href: '/dashboard/deals' },
+  { label: 'Analytics', href: '/dashboard/analytics' },
+  { label: 'Notifications', href: '/dashboard/notifications' },
+  { label: 'Support', href: '/dashboard/support' },
+  { label: 'Settings', href: '/dashboard/settings' },
+  { label: 'Admin Roles', href: '/dashboard/admin-roles' },
 ];
 
 export default function DashboardLayout({ children }: PropsWithChildren) {
@@ -22,7 +30,7 @@ export default function DashboardLayout({ children }: PropsWithChildren) {
   return (
     <AuthGate>
       <div className="flex min-h-screen">
-        <aside className="hidden w-60 shrink-0 border-r border-border bg-surface p-6 md:block">
+        <aside className="hidden w-60 shrink-0 overflow-y-auto border-r border-border bg-surface p-6 md:block">
           <h1 className="mb-8 text-lg font-bold text-navy-900">{BRAND.name} Admin</h1>
           {me?.isAdmin && (
             <nav className="space-y-1">

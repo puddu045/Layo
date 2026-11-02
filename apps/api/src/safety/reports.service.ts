@@ -1,22 +1,25 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { ReportStatus, UserStatus } from '@layo/db';
+import { ReportStatus } from '@layo/db';
 import type {
   AdminReportDetail,
   AdminReportListItem,
+  AssignReportRequest,
   CreateReportRequest,
+  ListReportsQuery,
   Report,
   ReportAction,
   ReportConversationMessage,
   ReportParty,
+  ReportPriority,
+  ReportReason,
 } from '@layo/contracts';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { AuditLogService } from '../common/audit/audit-log.service';
+import { SettingsService } from '../common/settings/settings.service';
+import { UsersService } from '../users/users.service';
+import { computeReportPriority } from './report-priority.util';
 
-// "Three users" / "ten users" in the original ask means distinct reporters, not raw report
-// rows — otherwise one person filing repeat reports could trigger escalation alone.
-const WARNING_THRESHOLD = 3;
-const BAN_THRESHOLD = 10;
 const CONVERSATION_MESSAGE_LIMIT = 50;
 
 @Injectable()
@@ -25,6 +28,8 @@ export class ReportsService {
     private readonly prisma: PrismaService,
     private readonly notificationsService: NotificationsService,
     private readonly auditLogService: AuditLogService,
+    private readonly settingsService: SettingsService,
+    private readonly usersService: UsersService,
   ) {}
 
   async create(reporterId: string, dto: CreateReportRequest): Promise<Report> {
@@ -82,24 +87,54 @@ export class ReportsService {
     };
   }
 
-  async listAll(status?: ReportStatus): Promise<AdminReportListItem[]> {
+  async listAll(query: ListReportsQuery): Promise<AdminReportListItem[]> {
     const rows = await this.prisma.client.report.findMany({
-      where: status ? { status } : undefined,
-      orderBy: { createdAt: 'desc' },
+      where: {
+        ...(query.status && { status: query.status }),
+        ...(query.priority && { priority: query.priority }),
+        ...(query.assignedAdminId && { assignedAdminId: query.assignedAdminId }),
+      },
+      // Most urgent first, then newest — a CRITICAL report filed yesterday should still
+      // outrank a LOW one filed five minutes ago.
+      orderBy: [{ priority: 'desc' }, { createdAt: 'desc' }],
       include: {
         reporter: { include: { profile: true } },
         reportedUser: { include: { profile: true } },
       },
     });
 
+    const assignedIds = [...new Set(rows.map((r) => r.assignedAdminId).filter((id): id is string => !!id))];
+    const assignedAdmins = assignedIds.length
+      ? await this.prisma.client.user.findMany({ where: { id: { in: assignedIds } }, select: { id: true, email: true } })
+      : [];
+    const emailByAdminId = new Map(assignedAdmins.map((a) => [a.id, a.email]));
+
     return rows.map((row) => ({
       id: row.id,
       reason: row.reason as AdminReportListItem['reason'],
       status: row.status,
+      priority: row.priority as ReportPriority,
+      assignedAdminId: row.assignedAdminId ?? undefined,
+      assignedAdminEmail: row.assignedAdminId ? emailByAdminId.get(row.assignedAdminId) : undefined,
       reporter: toReportParty(row.reporter),
       reportedUser: row.reportedUser ? toReportParty(row.reportedUser) : undefined,
       createdAt: row.createdAt.toISOString(),
     }));
+  }
+
+  async assign(adminId: string, reportId: string, dto: AssignReportRequest): Promise<AdminReportDetail> {
+    const report = await this.prisma.client.report.findUnique({ where: { id: reportId } });
+    if (!report) throw new NotFoundException('Report not found');
+
+    await this.prisma.client.report.update({
+      where: { id: reportId },
+      data: { assignedAdminId: dto.adminId },
+    });
+    await this.auditLogService.record(adminId, dto.adminId ? 'ASSIGN' : 'UNASSIGN', 'Report', reportId, {
+      assignedAdminId: dto.adminId,
+    });
+
+    return this.getDetail(reportId);
   }
 
   async getDetail(reportId: string): Promise<AdminReportDetail> {
@@ -112,15 +147,21 @@ export class ReportsService {
     });
     if (!row) throw new NotFoundException('Report not found');
 
-    const [conversation, reportedUserTotalReporterCount] = await Promise.all([
+    const [conversation, reportedUserTotalReporterCount, assignedAdmin] = await Promise.all([
       this.loadConversation(row),
       row.reportedUserId ? this.countDistinctReporters(row.reportedUserId) : Promise.resolve(undefined),
+      row.assignedAdminId
+        ? this.prisma.client.user.findUnique({ where: { id: row.assignedAdminId }, select: { email: true } })
+        : Promise.resolve(undefined),
     ]);
 
     return {
       id: row.id,
       reason: row.reason as AdminReportDetail['reason'],
       status: row.status,
+      priority: row.priority as ReportPriority,
+      assignedAdminId: row.assignedAdminId ?? undefined,
+      assignedAdminEmail: assignedAdmin?.email,
       reporter: toReportParty(row.reporter),
       reportedUser: row.reportedUser ? toReportParty(row.reportedUser) : undefined,
       details: row.details ?? undefined,
@@ -130,6 +171,10 @@ export class ReportsService {
     };
   }
 
+  /** `BAN` here is always a deliberate admin decision on a specific report — reached through
+   * `UsersService.applyModerationAction`, the one place that knows how to ban a user, so this
+   * never duplicates that logic. There is deliberately no path from report *count* alone to a
+   * ban: `applyEscalation` below only ever raises priority/notifies, never bans. */
   async applyAction(adminId: string, reportId: string, action: ReportAction): Promise<AdminReportDetail> {
     const report = await this.prisma.client.report.findUnique({ where: { id: reportId } });
     if (!report) throw new NotFoundException('Report not found');
@@ -138,7 +183,7 @@ export class ReportsService {
       if (!report.reportedUserId) {
         throw new BadRequestException('This report has no specific user to ban');
       }
-      await this.banUser(report.reportedUserId, adminId, `Banned from report ${reportId}`);
+      await this.usersService.applyModerationAction(adminId, report.reportedUserId, 'BAN', `Banned from report ${reportId}`);
     }
 
     await this.prisma.client.report.update({
@@ -155,38 +200,42 @@ export class ReportsService {
     return this.getDetail(reportId);
   }
 
-  /** Shared by the automatic report-threshold ban and an admin's manual "Ban user" action —
-   * `actorAdminId` is null for the automated path, which the nullable AuditLog/BannedIdentity
-   * actor columns exist specifically to support. */
-  async banUser(targetUserId: string, actorAdminId: string | null, reason: string): Promise<void> {
-    const user = await this.prisma.client.user.update({
-      where: { id: targetUserId },
-      data: { status: UserStatus.SUSPENDED },
+  /** Recomputes this reported user's priority across every one of their open reports and, at
+   * the warning threshold, notifies them directly. Crossing the escalation threshold raises
+   * priority to CRITICAL and notifies every admin so the case gets picked up — it never bans:
+   * "never automatically ban based solely on report counts" is enforced by this function simply
+   * not having a path to `UsersService.applyModerationAction('BAN', …)` at all. */
+  private async applyEscalation(reportedUserId: string): Promise<void> {
+    const [distinctReporterCount, moderationSettings] = await Promise.all([
+      this.countDistinctReporters(reportedUserId),
+      this.settingsService.getCategory('moderation'),
+    ]);
+
+    const openReports = await this.prisma.client.report.findMany({
+      where: { reportedUserId, status: { not: ReportStatus.DISMISSED } },
+      select: { id: true, reason: true },
     });
 
-    await Promise.all([
-      this.prisma.client.bannedIdentity.upsert({
-        where: { email: user.email },
-        create: { email: user.email, reason, bannedByAdminId: actorAdminId ?? undefined },
-        update: { reason, bannedByAdminId: actorAdminId ?? undefined, bannedAt: new Date() },
-      }),
-      this.notificationsService.create(targetUserId, 'ACCOUNT_SUSPENDED', { reason }),
-      this.auditLogService.record(actorAdminId, 'BAN', 'User', targetUserId, { reason }),
-    ]);
-  }
+    await Promise.all(
+      openReports.map((r) =>
+        this.prisma.client.report.update({
+          where: { id: r.id },
+          data: {
+            priority: computeReportPriority(r.reason as ReportReason, distinctReporterCount, moderationSettings),
+          },
+        }),
+      ),
+    );
 
-  private async applyEscalation(reportedUserId: string): Promise<void> {
-    const distinctReporterCount = await this.countDistinctReporters(reportedUserId);
-
-    if (distinctReporterCount === WARNING_THRESHOLD) {
+    if (distinctReporterCount === moderationSettings.warningThreshold) {
       await this.notificationsService.create(reportedUserId, 'REPORT_WARNING', {
         reportCount: distinctReporterCount,
       });
-    } else if (distinctReporterCount >= BAN_THRESHOLD) {
-      const user = await this.prisma.client.user.findUnique({ where: { id: reportedUserId } });
-      if (user && user.status === UserStatus.ACTIVE) {
-        await this.banUser(reportedUserId, null, `Automatically banned after ${distinctReporterCount} reports`);
-      }
+    } else if (distinctReporterCount === moderationSettings.escalationThreshold) {
+      await this.notificationsService.createForAdmins('REPORT_ESCALATED', {
+        reportedUserId,
+        reportCount: distinctReporterCount,
+      });
     }
   }
 

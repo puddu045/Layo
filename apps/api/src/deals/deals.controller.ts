@@ -15,6 +15,7 @@ import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { RequestUser } from '../common/guards/supabase-auth.guard';
 import { AdminGuard } from '../common/guards/admin.guard';
+import { RoleGuard } from '../common/guards/role.guard';
 import { DealsService } from './deals.service';
 
 @Controller('deals')
@@ -40,7 +41,13 @@ export class DealsController {
   @Get()
   @UseGuards(AdminGuard)
   listAll(@Query(new ZodValidationPipe(listDealsQuerySchema)) query: ListDealsQuery) {
-    return this.dealsService.listAll(query.status);
+    return this.dealsService.listAll(query);
+  }
+
+  @Get('engagement-stats')
+  @UseGuards(AdminGuard)
+  engagementStats() {
+    return this.dealsService.engagementStats();
   }
 
   @Get('business/:businessId')
@@ -58,7 +65,7 @@ export class DealsController {
   }
 
   @Patch(':id/moderate')
-  @UseGuards(AdminGuard)
+  @UseGuards(AdminGuard, RoleGuard('BUSINESS_MANAGER'))
   moderate(
     @CurrentUser() user: RequestUser,
     @Param('id') id: string,

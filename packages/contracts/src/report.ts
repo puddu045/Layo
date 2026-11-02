@@ -44,8 +44,13 @@ export const reportSchema = z.object({
 });
 export type Report = z.infer<typeof reportSchema>;
 
+export const reportPrioritySchema = z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']);
+export type ReportPriority = z.infer<typeof reportPrioritySchema>;
+
 export const listReportsQuerySchema = z.object({
   status: reportStatusSchema.optional(),
+  priority: reportPrioritySchema.optional(),
+  assignedAdminId: z.string().uuid().optional(),
 });
 export type ListReportsQuery = z.infer<typeof listReportsQuerySchema>;
 
@@ -62,11 +67,19 @@ export const adminReportListItemSchema = z.object({
   id: z.string().uuid(),
   reason: reportReasonSchema,
   status: reportStatusSchema,
+  priority: reportPrioritySchema,
+  assignedAdminId: z.string().uuid().optional(),
+  assignedAdminEmail: z.string().optional(),
   reporter: reportPartySchema,
   reportedUser: reportPartySchema.optional(),
   createdAt: z.string().datetime(),
 });
 export type AdminReportListItem = z.infer<typeof adminReportListItemSchema>;
+
+export const assignReportRequestSchema = z.object({
+  adminId: z.string().uuid().nullable(), // null unassigns
+});
+export type AssignReportRequest = z.infer<typeof assignReportRequestSchema>;
 
 /** One message as shown in the admin's read-only conversation view, regardless of whether it
  * came from a 1:1 chat or an airport room. */

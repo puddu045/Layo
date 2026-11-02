@@ -11,6 +11,6 @@ export class AuthController {
   @Get('me')
   async me(@CurrentUser() user: RequestUser) {
     const hasProfile = await this.authService.hasProfile(user.id);
-    return { id: user.id, email: user.email, isAdmin: user.isAdmin, hasProfile };
+    return { id: user.id, email: user.email, isAdmin: user.isAdmin, adminRole: user.adminRole, hasProfile };
   }
 }

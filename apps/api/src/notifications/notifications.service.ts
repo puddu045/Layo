@@ -21,6 +21,16 @@ export class NotificationsService {
     this.gateway.emitToUser(userId, socketEvents.NOTIFICATION_NEW, this.toNotification(row));
   }
 
+  /** Fans a notification out to every current admin (any role) — used for admin-facing alerts
+   * like a report escalating to CRITICAL, rather than one specific user. */
+  async createForAdmins(type: string, payload: Record<string, unknown>): Promise<void> {
+    const admins = await this.prisma.client.user.findMany({
+      where: { isAdmin: true },
+      select: { id: true },
+    });
+    await Promise.all(admins.map((admin) => this.create(admin.id, type, payload)));
+  }
+
   async list(userId: string, query: ListNotificationsQuery): Promise<NotificationPage> {
     const [rows, unreadCount] = await Promise.all([
       this.prisma.client.notification.findMany({

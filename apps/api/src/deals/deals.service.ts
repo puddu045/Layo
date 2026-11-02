@@ -1,6 +1,13 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { BusinessStatus, DealStatus } from '@layo/db';
-import type { CreateDealRequest, Deal, ModerateDealRequest, UpdateDealRequest } from '@layo/contracts';
+import type {
+  CreateDealRequest,
+  Deal,
+  DealEngagementStats,
+  ListDealsQuery,
+  ModerateDealRequest,
+  UpdateDealRequest,
+} from '@layo/contracts';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { AuditLogService } from '../common/audit/audit-log.service';
 import { toDeal } from '../common/mappers/deal.mapper';
@@ -104,13 +111,45 @@ export class DealsService {
     return rows.map(toDeal);
   }
 
-  async listAll(status?: DealStatus): Promise<Deal[]> {
+  async listAll(query: ListDealsQuery): Promise<Deal[]> {
     const rows = await this.prisma.client.deal.findMany({
-      where: status ? { status } : undefined,
+      where: {
+        ...(query.status && { status: query.status }),
+        ...(query.airportIata && { airportIata: query.airportIata }),
+        ...(query.terminal && { terminal: query.terminal }),
+      },
       include: DEAL_INCLUDE,
       orderBy: { createdAt: 'desc' },
     });
     return rows.map(toDeal);
+  }
+
+  /** Real counts from the Deal table — not click/redemption tracking, since nothing in the
+   * traveller app instruments deal views yet. Still genuinely useful for "how is the deal
+   * catalogue shaped right now" at a glance. */
+  async engagementStats(): Promise<DealEngagementStats> {
+    const now = new Date();
+    const in7Days = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+    const [total, byStatusRaw, byCategoryRaw, byAirportRaw, activeNow, expiringWithin7Days] = await Promise.all([
+      this.prisma.client.deal.count(),
+      this.prisma.client.deal.groupBy({ by: ['status'], _count: { _all: true } }),
+      this.prisma.client.deal.groupBy({ by: ['category'], _count: { _all: true } }),
+      this.prisma.client.deal.groupBy({ by: ['airportIata'], _count: { _all: true }, orderBy: { _count: { airportIata: 'desc' } }, take: 10 }),
+      this.prisma.client.deal.count({ where: { status: DealStatus.APPROVED, validFrom: { lte: now }, validUntil: { gte: now } } }),
+      this.prisma.client.deal.count({
+        where: { status: DealStatus.APPROVED, validUntil: { gte: now, lte: in7Days } },
+      }),
+    ]);
+
+    return {
+      totalDeals: total,
+      byStatus: byStatusRaw.map((r) => ({ status: r.status, count: r._count._all })),
+      byCategory: byCategoryRaw.map((r) => ({ category: r.category, count: r._count._all })),
+      byAirport: byAirportRaw.map((r) => ({ airportIata: r.airportIata, count: r._count._all })),
+      activeNow,
+      expiringWithin7Days,
+    };
   }
 
   async moderate(adminId: string, dealId: string, dto: ModerateDealRequest): Promise<Deal> {

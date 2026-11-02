@@ -10,6 +10,7 @@ import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { RequestUser } from '../common/guards/supabase-auth.guard';
 import { AdminGuard } from '../common/guards/admin.guard';
+import { RoleGuard } from '../common/guards/role.guard';
 import { BusinessesService } from './businesses.service';
 
 @Controller('businesses')
@@ -37,25 +38,25 @@ export class BusinessesController {
   }
 
   @Patch(':id/approve')
-  @UseGuards(AdminGuard)
+  @UseGuards(AdminGuard, RoleGuard('BUSINESS_MANAGER'))
   approve(@CurrentUser() user: RequestUser, @Param('id') id: string) {
     return this.businessesService.applyStatusAction(user.id, id, 'APPROVE');
   }
 
   @Patch(':id/reject')
-  @UseGuards(AdminGuard)
+  @UseGuards(AdminGuard, RoleGuard('BUSINESS_MANAGER'))
   reject(@CurrentUser() user: RequestUser, @Param('id') id: string) {
     return this.businessesService.applyStatusAction(user.id, id, 'REJECT');
   }
 
   @Patch(':id/suspend')
-  @UseGuards(AdminGuard)
+  @UseGuards(AdminGuard, RoleGuard('BUSINESS_MANAGER'))
   suspend(@CurrentUser() user: RequestUser, @Param('id') id: string) {
     return this.businessesService.applyStatusAction(user.id, id, 'SUSPEND');
   }
 
   @Patch(':id/reinstate')
-  @UseGuards(AdminGuard)
+  @UseGuards(AdminGuard, RoleGuard('BUSINESS_MANAGER'))
   reinstate(@CurrentUser() user: RequestUser, @Param('id') id: string) {
     return this.businessesService.applyStatusAction(user.id, id, 'REINSTATE');
   }

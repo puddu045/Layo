@@ -1,9 +1,16 @@
-import { Controller, Get, Param, Query } from '@nestjs/common';
+import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
+import { AdminGuard } from '../common/guards/admin.guard';
 import { AirportsService } from './airports.service';
 
 @Controller()
 export class AirportsController {
   constructor(private readonly airportsService: AirportsService) {}
+
+  @Get('airports/admin/traffic')
+  @UseGuards(AdminGuard)
+  adminTraffic() {
+    return this.airportsService.adminTraffic();
+  }
 
   @Get('airports')
   list(@Query('search') search?: string) {

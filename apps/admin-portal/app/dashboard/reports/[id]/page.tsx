@@ -2,9 +2,16 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import type { AdminReportDetail } from '@layo/contracts';
+import type { AdminAccount, AdminReportDetail } from '@layo/contracts';
 import { api } from '../../../../lib/api-client';
 import { StatusBadge } from '../../../../components/StatusBadge';
+
+const PRIORITY_COLORS: Record<string, string> = {
+  LOW: 'bg-slate-100 text-slate-500',
+  MEDIUM: 'bg-amber-100 text-amber-800',
+  HIGH: 'bg-orange-100 text-orange-800',
+  CRITICAL: 'bg-red-100 text-red-700',
+};
 
 const REASON_LABELS: Record<string, string> = {
   HARASSMENT: 'Abusive language or harassment',
@@ -19,6 +26,7 @@ export default function ReportDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const [report, setReport] = useState<AdminReportDetail | undefined>();
+  const [admins, setAdmins] = useState<AdminAccount[]>([]);
   const [acting, setActing] = useState(false);
 
   const refresh = () => {
@@ -26,6 +34,19 @@ export default function ReportDetailPage() {
   };
 
   useEffect(refresh, [id]);
+  useEffect(() => {
+    api.get<AdminAccount[]>('/admin-accounts').then(setAdmins);
+  }, []);
+
+  const assign = async (adminId: string | null) => {
+    setActing(true);
+    try {
+      await api.patch(`/reports/${id}/assign`, { adminId });
+      refresh();
+    } finally {
+      setActing(false);
+    }
+  };
 
   const act = async (action: 'dismiss' | 'review' | 'ban') => {
     if (action === 'ban' && !window.confirm('Ban this user? Their account will be suspended immediately.')) {
@@ -53,10 +74,29 @@ export default function ReportDetailPage() {
           <div className="mb-1 flex items-center gap-2">
             <h2 className="text-lg font-bold text-navy-900">{REASON_LABELS[report.reason] ?? report.reason}</h2>
             <StatusBadge status={report.status} />
+            <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${PRIORITY_COLORS[report.priority]}`}>
+              {report.priority}
+            </span>
           </div>
           <p className="text-sm text-slate-600">
             Reported by <strong>{report.reporter.displayName ?? report.reporter.email}</strong> ({report.reporter.email})
           </p>
+          <div className="mt-2 flex items-center gap-2 text-xs text-slate-500">
+            <span>Assigned to:</span>
+            <select
+              value={report.assignedAdminId ?? ''}
+              onChange={(e) => assign(e.target.value || null)}
+              disabled={acting}
+              className="rounded border border-border bg-background px-2 py-1"
+            >
+              <option value="">Unassigned</option>
+              {admins.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.email}
+                </option>
+              ))}
+            </select>
+          </div>
           {report.reportedUser && (
             <p className="text-sm text-slate-600">
               Against <strong>{report.reportedUser.displayName ?? report.reportedUser.email}</strong> (

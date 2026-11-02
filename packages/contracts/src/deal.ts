@@ -78,8 +78,20 @@ export type Deal = z.infer<typeof dealSchema>;
 
 export const listDealsQuerySchema = z.object({
   status: dealStatusSchema.optional(),
+  airportIata: iataAirportCodeSchema.optional(),
+  terminal: z.string().trim().optional(),
 });
 export type ListDealsQuery = z.infer<typeof listDealsQuerySchema>;
+
+export const dealEngagementStatsSchema = z.object({
+  totalDeals: z.number().int(),
+  byStatus: z.array(z.object({ status: dealStatusSchema, count: z.number().int() })),
+  byCategory: z.array(z.object({ category: dealCategorySchema, count: z.number().int() })),
+  byAirport: z.array(z.object({ airportIata: z.string(), count: z.number().int() })),
+  activeNow: z.number().int(),
+  expiringWithin7Days: z.number().int(),
+});
+export type DealEngagementStats = z.infer<typeof dealEngagementStatsSchema>;
 
 export const listDealsForMeQuerySchema = z.object({
   airportIata: iataAirportCodeSchema.optional(),

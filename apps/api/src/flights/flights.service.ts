@@ -1,6 +1,7 @@
 import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { loadApiEnv } from '@layo/config';
-import type { FlightCandidate, FlightLookupRequest, FlightLookupResponse } from '@layo/contracts';
+import type { FlightCandidate, FlightLookupFailure, FlightLookupRequest, FlightLookupResponse } from '@layo/contracts';
+import { PrismaService } from '../common/prisma/prisma.service';
 import { RedisService } from '../common/redis/redis.service';
 import { FLIGHT_PROVIDER, type IFlightProvider } from '../flight-provider/flight-provider.interface';
 import { FlightProviderUnavailableError } from '../flight-provider/aviationstack-flight.provider';
@@ -12,11 +13,40 @@ export class FlightsService {
   constructor(
     @Inject(FLIGHT_PROVIDER) private readonly provider: IFlightProvider,
     private readonly redis: RedisService,
+    private readonly prisma: PrismaService,
   ) {}
 
   async lookup(request: FlightLookupRequest): Promise<FlightLookupResponse> {
-    const candidates = await this.lookupCandidates(request.flightNumber, request.departureDate);
+    let providerFailureReason: string | undefined;
+    const candidates = await this.lookupCandidates(request.flightNumber, request.departureDate, (reason) => {
+      providerFailureReason = reason;
+    });
+
+    if (candidates.length === 0) {
+      await this.prisma.client.flightLookupFailure.create({
+        data: {
+          flightNumber: request.flightNumber,
+          departureDate: request.departureDate,
+          reason: providerFailureReason ?? 'No matching flight schedule found',
+        },
+      });
+    }
+
     return this.buildResponse(request, candidates);
+  }
+
+  async listLookupFailures(limit = 100): Promise<FlightLookupFailure[]> {
+    const rows = await this.prisma.client.flightLookupFailure.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: Math.min(limit, 200),
+    });
+    return rows.map((row) => ({
+      id: row.id,
+      flightNumber: row.flightNumber,
+      departureDate: row.departureDate,
+      reason: row.reason,
+      createdAt: row.createdAt.toISOString(),
+    }));
   }
 
   /** Re-queries the provider (through cache) and returns the single candidate the
@@ -37,7 +67,11 @@ export class FlightsService {
     return match;
   }
 
-  private async lookupCandidates(flightNumber: string, departureDate: string): Promise<FlightCandidate[]> {
+  private async lookupCandidates(
+    flightNumber: string,
+    departureDate: string,
+    onProviderFailure?: (reason: string) => void,
+  ): Promise<FlightCandidate[]> {
     const cacheKey = `flight-lookup:${flightNumber}:${departureDate}`;
     const cached = await this.redis.getJson<FlightCandidate[]>(cacheKey);
     if (cached) return cached;
@@ -50,6 +84,7 @@ export class FlightsService {
     } catch (err) {
       if (err instanceof FlightProviderUnavailableError) {
         this.logger.warn(`Flight provider unavailable: ${err.message}`);
+        onProviderFailure?.(`Provider unavailable: ${err.message}`);
         return [];
       }
       throw err;

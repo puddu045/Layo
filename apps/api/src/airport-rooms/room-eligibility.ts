@@ -17,6 +17,20 @@ export async function computeUserRoomAccessWindows(
 ): Promise<RoomAccessWindow[]> {
   const env = loadApiEnv();
 
+  // Admin-configurable override (Settings module) — not injected as a service since this is a
+  // plain function shared outside Nest's DI graph; reads the same `AppSetting` row the
+  // `SettingsService` would merge over these same env defaults.
+  const airportChatSetting = await prisma.client.appSetting.findUnique({ where: { key: 'airportChat' } });
+  const overrides = (airportChatSetting?.value as Partial<{
+    enabled: boolean;
+    accessWindowHoursBefore: number;
+    accessWindowHoursAfter: number;
+  }>) ?? {};
+  if (overrides.enabled === false) return [];
+
+  const accessWindowHoursBefore = overrides.accessWindowHoursBefore ?? env.AIRPORT_ROOM_ACCESS_WINDOW_HOURS_BEFORE;
+  const accessWindowHoursAfter = overrides.accessWindowHoursAfter ?? env.AIRPORT_ROOM_ACCESS_WINDOW_HOURS_AFTER;
+
   const journeys = await prisma.client.journey.findMany({
     where: { userId, isDiscoverable: true },
     include: { segments: { include: { flight: true }, orderBy: { sequence: 'asc' } } },
@@ -39,12 +53,7 @@ export async function computeUserRoomAccessWindows(
       departureAirportWindowMinutesAfter: env.DISCOVERY_DEPARTURE_WINDOW_MINUTES_AFTER,
     });
 
-    windows.push(
-      ...computeRoomAccessWindows(presenceWindows, {
-        accessWindowHoursBefore: env.AIRPORT_ROOM_ACCESS_WINDOW_HOURS_BEFORE,
-        accessWindowHoursAfter: env.AIRPORT_ROOM_ACCESS_WINDOW_HOURS_AFTER,
-      }),
-    );
+    windows.push(...computeRoomAccessWindows(presenceWindows, { accessWindowHoursBefore, accessWindowHoursAfter }));
   }
 
   return windows;

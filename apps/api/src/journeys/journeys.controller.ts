@@ -1,18 +1,33 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import {
   createJourneyRequestSchema,
+  listAdminJourneysQuerySchema,
   updateJourneyRequestSchema,
   type CreateJourneyRequest,
+  type ListAdminJourneysQuery,
   type UpdateJourneyRequest,
 } from '@layo/contracts';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { RequestUser } from '../common/guards/supabase-auth.guard';
+import { AdminGuard } from '../common/guards/admin.guard';
 import { JourneysService } from './journeys.service';
 
 @Controller('journeys')
 export class JourneysController {
   constructor(private readonly journeysService: JourneysService) {}
+
+  @Get('admin')
+  @UseGuards(AdminGuard)
+  adminList(@Query(new ZodValidationPipe(listAdminJourneysQuerySchema)) query: ListAdminJourneysQuery) {
+    return this.journeysService.adminList(query);
+  }
+
+  @Get('admin/duplicates')
+  @UseGuards(AdminGuard)
+  adminDuplicates() {
+    return this.journeysService.adminListDuplicateFlags();
+  }
 
   @Post()
   create(

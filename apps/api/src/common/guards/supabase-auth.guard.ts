@@ -14,6 +14,10 @@ export interface RequestUser {
   id: string;
   email: string;
   isAdmin: boolean;
+  /** Fine-grained admin tier (Admin Roles) — undefined for a non-admin. `isAdmin` alone still
+   * gates every "any kind of admin" route; `RoleGuard` additionally checks this for routes
+   * restricted to specific roles. A SUPER_ADMIN passes every `RoleGuard` check. */
+  adminRole?: 'SUPER_ADMIN' | 'MODERATOR' | 'BUSINESS_MANAGER';
 }
 
 /**
@@ -71,7 +75,12 @@ export class SupabaseAuthGuard implements CanActivate {
       throw new UnauthorizedException('This account is no longer active');
     }
 
-    const requestUser: RequestUser = { id: user.id, email: user.email, isAdmin: user.isAdmin };
+    const requestUser: RequestUser = {
+      id: user.id,
+      email: user.email,
+      isAdmin: user.isAdmin,
+      adminRole: user.adminRole ?? undefined,
+    };
     request.user = requestUser;
     return true;
   }

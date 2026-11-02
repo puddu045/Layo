@@ -3,6 +3,7 @@ import type { Prisma } from '@layo/db';
 import { loadApiEnv, type MatchingConfig } from '@layo/config';
 import type { DiscoverQuery, Match, PaginatedResponse } from '@layo/contracts';
 import { PrismaService } from '../common/prisma/prisma.service';
+import { SettingsService } from '../common/settings/settings.service';
 import { toPublicProfile } from '../common/mappers/profile.mapper';
 import { BlocksService } from '../safety/blocks.service';
 import { computeMatches, type CandidateTraveller } from './matching.algorithm';
@@ -10,17 +11,23 @@ import { computePresenceWindows, type PresenceSegmentInput, type PresenceWindow 
 
 @Injectable()
 export class MatchingService {
-  private readonly config: MatchingConfig;
-
   constructor(
     private readonly prisma: PrismaService,
     private readonly blocksService: BlocksService,
-  ) {
+    private readonly settingsService: SettingsService,
+  ) {}
+
+  /** Admin-configurable (Settings → Matching rules) override over the env defaults — fetched
+   * per call rather than cached at construction, so a settings change takes effect on the next
+   * request without a restart. `enabled: false` is handled by the caller (`discover`). */
+  private async getConfig(): Promise<MatchingConfig & { enabled: boolean }> {
     const env = loadApiEnv();
-    this.config = {
-      departureAirportWindowMinutesBefore: env.DISCOVERY_DEPARTURE_WINDOW_MINUTES_BEFORE,
-      departureAirportWindowMinutesAfter: env.DISCOVERY_DEPARTURE_WINDOW_MINUTES_AFTER,
-      minAirportOverlapMinutes: env.DISCOVERY_MIN_AIRPORT_OVERLAP_MINUTES,
+    const settings = await this.settingsService.getCategory('matching');
+    return {
+      enabled: settings.enabled,
+      departureAirportWindowMinutesBefore: settings.departureAirportWindowMinutesBefore ?? env.DISCOVERY_DEPARTURE_WINDOW_MINUTES_BEFORE,
+      departureAirportWindowMinutesAfter: settings.departureAirportWindowMinutesAfter ?? env.DISCOVERY_DEPARTURE_WINDOW_MINUTES_AFTER,
+      minAirportOverlapMinutes: settings.minAirportOverlapMinutes ?? env.DISCOVERY_MIN_AIRPORT_OVERLAP_MINUTES,
       airportRoomAccessWindowHoursBefore: env.AIRPORT_ROOM_ACCESS_WINDOW_HOURS_BEFORE,
       airportRoomAccessWindowHoursAfter: env.AIRPORT_ROOM_ACCESS_WINDOW_HOURS_AFTER,
     };
@@ -28,6 +35,8 @@ export class MatchingService {
 
   async discover(requesterId: string, query: DiscoverQuery): Promise<PaginatedResponse<Match>> {
     const now = new Date();
+    const config = await this.getConfig();
+    if (!config.enabled) return emptyPage(query);
 
     const requesterJourneys = await this.prisma.client.journey.findMany({
       where: {
@@ -43,7 +52,7 @@ export class MatchingService {
     for (const journey of requesterJourneys) {
       const segments = toPresenceSegments(journey.segments);
       for (const s of segments) requesterFlightIds.add(s.flightId);
-      requesterWindows.push(...computePresenceWindows(segments, this.config));
+      requesterWindows.push(...computePresenceWindows(segments, config));
     }
 
     if (requesterWindows.length === 0 && requesterFlightIds.size === 0) {
@@ -93,7 +102,7 @@ export class MatchingService {
       requesterWindows,
       requesterFlightIds,
       candidates,
-      config: this.config,
+      config,
       now,
     });
 

@@ -26,16 +26,30 @@ enum UserStatus {
   DELETED
 }
 
+/// Server-enforced admin permission tiers (Admin Roles). `isAdmin` stays in sync with
+/// `adminRole !== null` — kept as a plain boolean too since most route guards only need
+/// "is this caller any kind of admin", while a handful of write actions additionally check
+/// `adminRole` via `RoleGuard`.
+enum AdminRole {
+  SUPER_ADMIN
+  MODERATOR
+  BUSINESS_MANAGER
+}
+
 /// Mirrors a Supabase Auth user. Holds only identity/account-level fields —
 /// never public-facing profile content.
 model User {
-  id        String     @id @default(uuid()) // matches Supabase auth.users.id
-  email     String     @unique
-  isAdmin   Boolean    @default(false)
-  status    UserStatus @default(ACTIVE)
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
-  deletedAt DateTime?
+  id         String     @id @default(uuid()) // matches Supabase auth.users.id
+  email      String     @unique
+  isAdmin    Boolean    @default(false)
+  adminRole  AdminRole?
+  status     UserStatus @default(ACTIVE)
+  /// Set by an admin's "Verify" action (Users module) — a trust signal shown on the profile,
+  /// independent of account status.
+  verifiedAt DateTime?
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  deletedAt  DateTime?
 
   profile Profile?
 
@@ -233,11 +247,14 @@ model Message {
 // ---------------------------------------------------------------------------
 
 model AirportRoom {
-  airportIata String   @id
-  airport     Airport  @relation(fields: [airportIata], references: [iataCode])
-  name        String
-  description String?
-  createdAt   DateTime @default(now())
+  airportIata  String   @id
+  airport      Airport  @relation(fields: [airportIata], references: [iataCode])
+  name         String
+  description  String?
+  /// Admin moderation: a locked room rejects new messages (existing history stays visible).
+  locked       Boolean  @default(false)
+  lockedReason String?
+  createdAt    DateTime @default(now())
 
   memberships AirportRoomMembership[]
   messages    AirportRoomMessage[]
@@ -258,15 +275,32 @@ model AirportRoomMembership {
 }
 
 model AirportRoomMessage {
-  id          String      @id @default(uuid())
-  airportIata String
-  room        AirportRoom @relation(fields: [airportIata], references: [airportIata], onDelete: Cascade)
-  senderId    String
-  sender      User        @relation(fields: [senderId], references: [id])
-  body        String
-  createdAt   DateTime    @default(now())
+  id               String      @id @default(uuid())
+  airportIata      String
+  room             AirportRoom @relation(fields: [airportIata], references: [airportIata], onDelete: Cascade)
+  senderId         String
+  sender           User        @relation(fields: [senderId], references: [id])
+  body             String
+  /// Soft-removed by a moderator — hidden from the traveller-facing room, kept for audit history.
+  removedAt        DateTime?
+  removedByAdminId String?
+  createdAt        DateTime    @default(now())
 
   @@index([airportIata, createdAt])
+}
+
+/// A moderator-issued, time-boxed mute from one airport room. Checked in `postMessage`
+/// alongside the room's own `locked` flag.
+model AirportRoomMute {
+  id             String    @id @default(uuid())
+  airportIata    String
+  userId         String
+  mutedUntil     DateTime?
+  reason         String?
+  mutedByAdminId String?
+  createdAt      DateTime  @default(now())
+
+  @@unique([airportIata, userId])
 }
 
 // ---------------------------------------------------------------------------
@@ -380,21 +414,57 @@ enum ReportStatus {
   DISMISSED
 }
 
+/// Computed from the reported user's distinct-reporter count and the report's own reason
+/// severity (see `computeReportPriority`) — never from one report's count in isolation, and
+/// never a trigger for an automatic ban. CRITICAL means "needs review now", not "ban now".
+enum ReportPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
 model Report {
-  id                    String       @id @default(uuid())
+  id                    String         @id @default(uuid())
   reporterId            String
-  reporter              User         @relation("ReportReporter", fields: [reporterId], references: [id])
+  reporter              User           @relation("ReportReporter", fields: [reporterId], references: [id])
   reportedUserId        String?
-  reportedUser          User?        @relation("ReportReported", fields: [reportedUserId], references: [id])
+  reportedUser          User?          @relation("ReportReported", fields: [reportedUserId], references: [id])
   reportedMessageId     String?
   reportedRoomMessageId String?
   reason                String
   details               String?
-  status                ReportStatus @default(OPEN)
+  status                ReportStatus   @default(OPEN)
+  priority              ReportPriority @default(LOW)
+  /// Case assignment — which admin is working this report, if any.
+  assignedAdminId       String?
   resolvedByAdminId     String?
-  resolvedByAdmin       User?        @relation("ReportResolvedBy", fields: [resolvedByAdminId], references: [id])
+  resolvedByAdmin       User?          @relation("ReportResolvedBy", fields: [resolvedByAdminId], references: [id])
   resolvedAt            DateTime?
-  createdAt             DateTime     @default(now())
+  createdAt             DateTime       @default(now())
+
+  @@index([status])
+  @@index([priority])
+}
+
+enum AppealStatus {
+  PENDING
+  APPROVED
+  DENIED
+}
+
+/// A suspended/banned account can't call any authenticated endpoint (`SupabaseAuthGuard`
+/// rejects them before any controller runs), so this is filed unauthenticated, by email, and
+/// matched up by an admin reviewing it — not linked to one specific Report, since a ban can
+/// follow from several.
+model ReportAppeal {
+  id                String       @id @default(uuid())
+  email             String
+  message           String
+  status            AppealStatus @default(PENDING)
+  resolvedByAdminId String?
+  resolvedAt        DateTime?
+  createdAt         DateTime     @default(now())
 
   @@index([status])
 }
@@ -436,4 +506,107 @@ model AuditLog {
   createdAt      DateTime @default(now())
 
   @@index([targetType, targetId])
+}
+
+// ---------------------------------------------------------------------------
+// Admin settings, flight diagnostics, announcements, support (Admin Portal)
+// ---------------------------------------------------------------------------
+
+/// Admin-editable runtime configuration (Settings module), keyed by category — e.g.
+/// `"moderation"`, `"matching"`, `"airportChat"`, `"featureFlags"`. Each value is a partial
+/// JSON object merged over that category's compiled-in defaults (see `SettingsService`), so a
+/// row only needs to exist once an admin has actually changed something.
+model AppSetting {
+  key              String   @id
+  value            Json
+  updatedByAdminId String?
+  updatedAt        DateTime @updatedAt
+}
+
+/// Logged whenever `FlightsService.lookup` fails (provider error or no match), so admins can
+/// see which flight numbers/dates travellers are failing to find without reading server logs.
+model FlightLookupFailure {
+  id            String   @id @default(uuid())
+  flightNumber  String
+  departureDate String
+  reason        String
+  createdAt     DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+enum AnnouncementAudience {
+  ALL
+  BY_AIRPORT
+  SPECIFIC_USERS
+}
+
+enum AnnouncementStatus {
+  SCHEDULED
+  SENT
+  CANCELLED
+}
+
+/// An admin-authored broadcast. Sent immediately when `scheduledAt` is unset or already past;
+/// otherwise picked up by `AnnouncementsService`'s cron. Fans out to `Notification` rows
+/// (type `'ANNOUNCEMENT'`) for its audience at send time.
+model Announcement {
+  id                String               @id @default(uuid())
+  title             String
+  body              String
+  audience          AnnouncementAudience
+  targetAirportIata String?
+  targetUserIds     String[]             @default([])
+  scheduledAt       DateTime?
+  sentAt            DateTime?
+  status            AnnouncementStatus   @default(SCHEDULED)
+  createdByAdminId  String?
+  createdAt         DateTime             @default(now())
+
+  @@index([status, scheduledAt])
+}
+
+enum SupportCategory {
+  BUG
+  FEEDBACK
+  ACCOUNT
+  OTHER
+}
+
+enum SupportStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+model SupportTicket {
+  id              String          @id @default(uuid())
+  /// Nullable: a signed-out/unauthenticated visitor can still file feedback by email.
+  userId          String?
+  email           String
+  subject         String
+  body            String
+  category        SupportCategory @default(OTHER)
+  status          SupportStatus   @default(OPEN)
+  assignedAdminId String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  replies SupportReply[]
+
+  @@index([status])
+}
+
+model SupportReply {
+  id            String        @id @default(uuid())
+  ticketId      String
+  ticket        SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  /// Exactly one of the two is set: an admin's reply or the ticket author's own follow-up.
+  authorAdminId String?
+  authorUserId  String?
+  body          String
+  createdAt     DateTime      @default(now())
+
+  @@index([ticketId])
 }

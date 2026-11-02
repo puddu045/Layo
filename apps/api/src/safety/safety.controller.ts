@@ -1,9 +1,11 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import {
+  assignReportRequestSchema,
   blockUserRequestSchema,
   createReportRequestSchema,
   listReportsQuerySchema,
+  type AssignReportRequest,
   type BlockUserRequest,
   type CreateReportRequest,
   type ListReportsQuery,
@@ -12,6 +14,7 @@ import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { RequestUser } from '../common/guards/supabase-auth.guard';
 import { AdminGuard } from '../common/guards/admin.guard';
+import { RoleGuard } from '../common/guards/role.guard';
 import { BlocksService } from './blocks.service';
 import { ReportsService } from './reports.service';
 
@@ -54,13 +57,23 @@ export class ReportsController {
   @Get()
   @UseGuards(AdminGuard)
   listAll(@Query(new ZodValidationPipe(listReportsQuerySchema)) query: ListReportsQuery) {
-    return this.reportsService.listAll(query.status);
+    return this.reportsService.listAll(query);
   }
 
   @Get(':id')
   @UseGuards(AdminGuard)
   getDetail(@Param('id') id: string) {
     return this.reportsService.getDetail(id);
+  }
+
+  @Patch(':id/assign')
+  @UseGuards(AdminGuard)
+  assign(
+    @CurrentUser() user: RequestUser,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(assignReportRequestSchema)) dto: AssignReportRequest,
+  ) {
+    return this.reportsService.assign(user.id, id, dto);
   }
 
   @Patch(':id/dismiss')
@@ -76,7 +89,7 @@ export class ReportsController {
   }
 
   @Patch(':id/ban')
-  @UseGuards(AdminGuard)
+  @UseGuards(AdminGuard, RoleGuard('MODERATOR'))
   ban(@CurrentUser() user: RequestUser, @Param('id') id: string) {
     return this.reportsService.applyAction(user.id, id, 'BAN');
   }

@@ -9,6 +9,17 @@ const COLORS: Record<string, string> = {
   REVIEWED: 'bg-blue-100 text-blue-700',
   ACTIONED: 'bg-red-100 text-red-700',
   DISMISSED: 'bg-slate-200 text-slate-500',
+  // Appeal / support / user statuses
+  DENIED: 'bg-red-100 text-red-700',
+  ACTIVE: 'bg-teal-100 text-teal-700',
+  DELETED: 'bg-slate-200 text-slate-500',
+  IN_PROGRESS: 'bg-blue-100 text-blue-700',
+  RESOLVED: 'bg-teal-100 text-teal-700',
+  CLOSED: 'bg-slate-200 text-slate-500',
+  // Announcement statuses
+  SCHEDULED: 'bg-amber-100 text-amber-800',
+  SENT: 'bg-teal-100 text-teal-700',
+  CANCELLED: 'bg-slate-200 text-slate-500',
 };
 
 export function StatusBadge({ status }: { status: string }) {

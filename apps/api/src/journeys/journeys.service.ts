@@ -2,9 +2,13 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException 
 import { computeCanonicalFlightKey, FlightDataSource, FlightStatus } from '@layo/db';
 import type {
   AddJourneySegmentRequest,
+  AdminJourneyListItem,
   CreateJourneyRequest,
+  DuplicateJourneyFlag,
   FlightCandidate,
   Journey,
+  ListAdminJourneysQuery,
+  PaginatedResponse,
   UpdateJourneyRequest,
 } from '@layo/contracts';
 import { PrismaService } from '../common/prisma/prisma.service';
@@ -175,6 +179,98 @@ export class JourneysService {
       update: {},
     });
     return flight.id;
+  }
+
+  // -- Admin: search, airport traffic inputs, duplicate detection -------------------------
+
+  async adminList(query: ListAdminJourneysQuery): Promise<PaginatedResponse<AdminJourneyListItem>> {
+    const where = {
+      ...(query.airportIata && {
+        segments: { some: { flight: { OR: [{ departureAirportIata: query.airportIata }, { arrivalAirportIata: query.airportIata }] } } },
+      }),
+      ...(query.search && {
+        user: {
+          OR: [
+            { email: { contains: query.search, mode: 'insensitive' as const } },
+            { profile: { displayName: { contains: query.search, mode: 'insensitive' as const } } },
+          ],
+        },
+      }),
+    };
+
+    const [rows, total] = await Promise.all([
+      this.prisma.client.journey.findMany({
+        where,
+        include: {
+          user: { include: { profile: true } },
+          segments: {
+            orderBy: { sequence: 'asc' },
+            include: { flight: true },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        skip: (query.page - 1) * query.pageSize,
+        take: query.pageSize,
+      }),
+      this.prisma.client.journey.count({ where }),
+    ]);
+
+    return {
+      items: rows.map((row) => ({
+        id: row.id,
+        userId: row.userId,
+        userEmail: row.user.email,
+        userDisplayName: row.user.profile?.displayName,
+        title: row.title ?? undefined,
+        isDiscoverable: row.isDiscoverable,
+        segmentCount: row.segments.length,
+        firstDepartureAirportIata: row.segments[0]?.flight.departureAirportIata,
+        lastArrivalAirportIata: row.segments[row.segments.length - 1]?.flight.arrivalAirportIata,
+        createdAt: row.createdAt.toISOString(),
+      })),
+      page: query.page,
+      pageSize: query.pageSize,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / query.pageSize)),
+    };
+  }
+
+  /** Flags users with more than one journey containing a segment on the exact same `Flight`
+   * row — a real data-integrity signal (the same traveller logged the same flight twice),
+   * distinct from many *different* users sharing a flight, which is the normal/expected case
+   * that makes matching work at all. */
+  async adminListDuplicateFlags(): Promise<DuplicateJourneyFlag[]> {
+    const segments = await this.prisma.client.journeySegment.findMany({
+      include: { journey: { select: { id: true, userId: true } }, flight: { select: { id: true, flightNumber: true } } },
+    });
+
+    const byUserAndFlight = new Map<string, { userId: string; userEmail?: string; flightId: string; flightNumber: string; journeyIds: Set<string> }>();
+    for (const s of segments) {
+      const key = `${s.journey.userId}:${s.flightId}`;
+      const entry = byUserAndFlight.get(key) ?? {
+        userId: s.journey.userId,
+        flightId: s.flightId,
+        flightNumber: s.flight.flightNumber,
+        journeyIds: new Set<string>(),
+      };
+      entry.journeyIds.add(s.journey.id);
+      byUserAndFlight.set(key, entry);
+    }
+
+    const flagged = [...byUserAndFlight.values()].filter((e) => e.journeyIds.size > 1);
+    if (flagged.length === 0) return [];
+
+    const userIds = [...new Set(flagged.map((f) => f.userId))];
+    const users = await this.prisma.client.user.findMany({ where: { id: { in: userIds } }, select: { id: true, email: true } });
+    const emailByUserId = new Map(users.map((u) => [u.id, u.email]));
+
+    return flagged.map((f) => ({
+      userId: f.userId,
+      userEmail: emailByUserId.get(f.userId) ?? 'unknown',
+      flightId: f.flightId,
+      flightNumber: f.flightNumber,
+      journeyIds: [...f.journeyIds],
+    }));
   }
 
   private async ensureAirportRooms(flightIds: string[]) {

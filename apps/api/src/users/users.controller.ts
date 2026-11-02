@@ -1,13 +1,19 @@
-import { Body, Controller, Delete, Get, NotFoundException, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, NotFoundException, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import {
   createProfileRequestSchema,
+  listAdminUsersQuerySchema,
   updateProfileRequestSchema,
+  userModerationRequestSchema,
   type CreateProfileRequest,
+  type ListAdminUsersQuery,
   type UpdateProfileRequest,
+  type UserModerationRequest,
 } from '@layo/contracts';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { RequestUser } from '../common/guards/supabase-auth.guard';
+import { AdminGuard } from '../common/guards/admin.guard';
+import { RoleGuard } from '../common/guards/role.guard';
 import { UsersService } from './users.service';
 
 @Controller()
@@ -46,5 +52,65 @@ export class UsersController {
       throw new NotFoundException('Profile not found');
     }
     return this.usersService.getPublicProfile(userId);
+  }
+
+  // -- Admin: search, detail, moderation -------------------------------------------------
+
+  @Get('users')
+  @UseGuards(AdminGuard)
+  listAdmin(@Query(new ZodValidationPipe(listAdminUsersQuerySchema)) query: ListAdminUsersQuery) {
+    return this.usersService.listAdmin(query);
+  }
+
+  @Get('users/:userId/admin')
+  @UseGuards(AdminGuard)
+  getAdminDetail(@Param('userId') userId: string) {
+    return this.usersService.getAdminDetail(userId);
+  }
+
+  @Patch('users/:userId/warn')
+  @UseGuards(AdminGuard, RoleGuard('MODERATOR'))
+  warn(
+    @CurrentUser() admin: RequestUser,
+    @Param('userId') userId: string,
+    @Body(new ZodValidationPipe(userModerationRequestSchema)) dto: UserModerationRequest,
+  ) {
+    return this.usersService.applyModerationAction(admin.id, userId, 'WARN', dto.reason);
+  }
+
+  @Patch('users/:userId/suspend')
+  @UseGuards(AdminGuard, RoleGuard('MODERATOR'))
+  suspend(
+    @CurrentUser() admin: RequestUser,
+    @Param('userId') userId: string,
+    @Body(new ZodValidationPipe(userModerationRequestSchema)) dto: UserModerationRequest,
+  ) {
+    return this.usersService.applyModerationAction(admin.id, userId, 'SUSPEND', dto.reason);
+  }
+
+  @Patch('users/:userId/ban')
+  @UseGuards(AdminGuard, RoleGuard('MODERATOR'))
+  ban(
+    @CurrentUser() admin: RequestUser,
+    @Param('userId') userId: string,
+    @Body(new ZodValidationPipe(userModerationRequestSchema)) dto: UserModerationRequest,
+  ) {
+    return this.usersService.applyModerationAction(admin.id, userId, 'BAN', dto.reason);
+  }
+
+  @Patch('users/:userId/reinstate')
+  @UseGuards(AdminGuard, RoleGuard('MODERATOR'))
+  reinstate(
+    @CurrentUser() admin: RequestUser,
+    @Param('userId') userId: string,
+    @Body(new ZodValidationPipe(userModerationRequestSchema)) dto: UserModerationRequest,
+  ) {
+    return this.usersService.applyModerationAction(admin.id, userId, 'REINSTATE', dto.reason);
+  }
+
+  @Patch('users/:userId/verify')
+  @UseGuards(AdminGuard, RoleGuard('MODERATOR'))
+  verify(@CurrentUser() admin: RequestUser, @Param('userId') userId: string) {
+    return this.usersService.applyModerationAction(admin.id, userId, 'VERIFY');
   }
 }

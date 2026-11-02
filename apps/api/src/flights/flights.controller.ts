@@ -1,6 +1,7 @@
-import { Body, Controller, Post } from '@nestjs/common';
+import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
 import { flightLookupRequestSchema, type FlightLookupRequest } from '@layo/contracts';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
+import { AdminGuard } from '../common/guards/admin.guard';
 import { FlightsService } from './flights.service';
 
 @Controller('flights')
@@ -10,5 +11,11 @@ export class FlightsController {
   @Post('lookup')
   lookup(@Body(new ZodValidationPipe(flightLookupRequestSchema)) dto: FlightLookupRequest) {
     return this.flightsService.lookup(dto);
+  }
+
+  @Get('admin/lookup-failures')
+  @UseGuards(AdminGuard)
+  listLookupFailures() {
+    return this.flightsService.listLookupFailures();
   }
 }

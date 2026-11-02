@@ -26,5 +26,6 @@ export const meSchema = z.object({
   id: z.string().uuid(),
   email: z.string().email(),
   isAdmin: z.boolean(),
+  adminRole: z.enum(['SUPER_ADMIN', 'MODERATOR', 'BUSINESS_MANAGER']).optional(),
 });
 export type Me = z.infer<typeof meSchema>;

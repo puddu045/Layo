@@ -6,6 +6,7 @@ import { PrismaModule } from './common/prisma/prisma.module';
 import { SupabaseModule } from './common/supabase/supabase.module';
 import { RedisModule } from './common/redis/redis.module';
 import { AuditLogModule } from './common/audit/audit-log.module';
+import { SettingsModule } from './common/settings/settings.module';
 import { SupabaseAuthGuard } from './common/guards/supabase-auth.guard';
 import { AppController } from './app.controller';
 import { AuthModule } from './auth/auth.module';
@@ -21,6 +22,8 @@ import { SafetyModule } from './safety/safety.module';
 import { BusinessesModule } from './businesses/businesses.module';
 import { DealsModule } from './deals/deals.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { AdminModule } from './admin/admin.module';
+import { SupportModule } from './support/support.module';
 
 @Module({
   imports: [
@@ -30,6 +33,7 @@ import { NotificationsModule } from './notifications/notifications.module';
     SupabaseModule,
     RedisModule,
     AuditLogModule,
+    SettingsModule,
     AuthModule,
     UsersModule,
     AirportsModule,
@@ -43,6 +47,8 @@ import { NotificationsModule } from './notifications/notifications.module';
     BusinessesModule,
     DealsModule,
     NotificationsModule,
+    SupportModule,
+    AdminModule,
   ],
   controllers: [AppController],
   providers: [
