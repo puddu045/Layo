@@ -6,16 +6,30 @@ import { ScreenContainer } from '../../src/components/ScreenContainer';
 import { TextField } from '../../src/components/TextField';
 import { Button } from '../../src/components/Button';
 import { useAuth } from '../../src/lib/auth-context';
+import { notifyInfo } from '../../src/lib/notify';
 import { colors, spacing, typography } from '../../src/theme/tokens';
 
 export default function Register() {
-  const { signUp } = useAuth();
+  const { signUp, resendConfirmation } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState<string | undefined>();
   const [loading, setLoading] = useState(false);
   const [confirmationSent, setConfirmationSent] = useState(false);
+  const [resending, setResending] = useState(false);
+
+  const onResend = async () => {
+    setResending(true);
+    try {
+      await resendConfirmation(email);
+      notifyInfo('Email sent', `We've sent another confirmation link to ${email}.`);
+    } catch (err) {
+      notifyInfo('Could not resend', err instanceof Error ? err.message : 'Please try again.');
+    } finally {
+      setResending(false);
+    }
+  };
 
   const onSubmit = async () => {
     setError(undefined);
@@ -47,6 +61,9 @@ export default function Register() {
           We&apos;ve sent a confirmation link to {email}. Confirm it, then sign in below.
         </Text>
         <Button label="Go to sign in" onPress={() => router.replace('/(auth)/login')} />
+        <View style={{ marginTop: spacing.md }}>
+          <Button label="Resend email" variant="ghost" onPress={onResend} loading={resending} />
+        </View>
       </ScreenContainer>
     );
   }

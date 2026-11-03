@@ -41,6 +41,9 @@ enum AdminRole {
 model User {
   id         String     @id @default(uuid()) // matches Supabase auth.users.id
   email      String     @unique
+  /// E.164-ish format (e.g. +14155552671), captured but not verified — see the Settings screen.
+  /// Never exposed on the public profile, same as email.
+  phone      String?    @unique
   isAdmin    Boolean    @default(false)
   adminRole  AdminRole?
   status     UserStatus @default(ACTIVE)

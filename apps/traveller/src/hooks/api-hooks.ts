@@ -10,6 +10,7 @@ import type {
   OwnProfile,
   PaginatedResponse,
   Match,
+  UpdatePhoneRequest,
   UpdateProfileRequest,
 } from '@layo/contracts';
 import { api } from '../lib/api-client';
@@ -36,6 +37,16 @@ export function useUpdateProfile() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (dto: UpdateProfileRequest) => api.patch<OwnProfile>('/me/profile', dto),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['profile', 'me'] });
+    },
+  });
+}
+
+export function useUpdatePhone() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (dto: UpdatePhoneRequest) => api.patch<OwnProfile>('/me/phone', dto),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['profile', 'me'] });
     },

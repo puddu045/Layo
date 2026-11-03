@@ -6,17 +6,24 @@ import { ScreenContainer } from '../../src/components/ScreenContainer';
 import { TextField } from '../../src/components/TextField';
 import { Button } from '../../src/components/Button';
 import { useAuth } from '../../src/lib/auth-context';
+import { notifyInfo } from '../../src/lib/notify';
 import { colors, spacing, typography } from '../../src/theme/tokens';
 
 export default function Login() {
-  const { signIn } = useAuth();
+  const { signIn, resendConfirmation } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | undefined>();
   const [loading, setLoading] = useState(false);
+  // Supabase rejects sign-in with this exact message when the account exists but hasn't clicked
+  // the confirmation link yet — distinct from a wrong password, so it gets its own resend action
+  // instead of just a generic error string.
+  const [unconfirmed, setUnconfirmed] = useState(false);
+  const [resending, setResending] = useState(false);
 
   const onSubmit = async () => {
     setError(undefined);
+    setUnconfirmed(false);
     const parsed = signInRequestSchema.safeParse({ email, password });
     if (!parsed.success) {
       setError(parsed.error.issues[0]?.message ?? 'Invalid details');
@@ -27,9 +34,26 @@ export default function Login() {
       await signIn(parsed.data.email, parsed.data.password);
       router.replace('/');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not sign in');
+      if (err instanceof Error && /email not confirmed/i.test(err.message)) {
+        setUnconfirmed(true);
+        setError('Confirm your email before signing in — check your inbox for the link.');
+      } else {
+        setError(err instanceof Error ? err.message : 'Could not sign in');
+      }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const onResend = async () => {
+    setResending(true);
+    try {
+      await resendConfirmation(email);
+      notifyInfo('Email sent', `We've sent another confirmation link to ${email}.`);
+    } catch (err) {
+      notifyInfo('Could not resend', err instanceof Error ? err.message : 'Please try again.');
+    } finally {
+      setResending(false);
     }
   };
 
@@ -49,6 +73,11 @@ export default function Login() {
         />
         <TextField label="Password" secureTextEntry value={password} onChangeText={setPassword} />
         {error ? <Text style={styles.error}>{error}</Text> : null}
+        {unconfirmed && (
+          <View style={{ marginBottom: spacing.md }}>
+            <Button label="Resend confirmation email" variant="ghost" onPress={onResend} loading={resending} />
+          </View>
+        )}
 
         <Button label="Sign in" onPress={onSubmit} loading={loading} />
 

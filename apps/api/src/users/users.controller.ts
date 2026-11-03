@@ -2,10 +2,12 @@ import { Body, Controller, Delete, Get, NotFoundException, Param, Patch, Post, Q
 import {
   createProfileRequestSchema,
   listAdminUsersQuerySchema,
+  updatePhoneRequestSchema,
   updateProfileRequestSchema,
   userModerationRequestSchema,
   type CreateProfileRequest,
   type ListAdminUsersQuery,
+  type UpdatePhoneRequest,
   type UpdateProfileRequest,
   type UserModerationRequest,
 } from '@layo/contracts';
@@ -39,6 +41,14 @@ export class UsersController {
     @Body(new ZodValidationPipe(updateProfileRequestSchema)) dto: UpdateProfileRequest,
   ) {
     return this.usersService.updateProfile(user.id, dto);
+  }
+
+  @Patch('me/phone')
+  updatePhone(
+    @CurrentUser() user: RequestUser,
+    @Body(new ZodValidationPipe(updatePhoneRequestSchema)) dto: UpdatePhoneRequest,
+  ) {
+    return this.usersService.updatePhone(user.id, dto.phone);
   }
 
   @Delete('me')

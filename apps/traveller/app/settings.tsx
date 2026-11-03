@@ -1,20 +1,22 @@
 import { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { router } from 'expo-router';
-import { updateProfileRequestSchema } from '@layo/contracts';
+import { updatePhoneRequestSchema, updateProfileRequestSchema } from '@layo/contracts';
 import { ScreenContainer } from '../src/components/ScreenContainer';
 import { TextField } from '../src/components/TextField';
 import { Button } from '../src/components/Button';
 import { ErrorState, LoadingState } from '../src/components/StateViews';
 import { useAuth } from '../src/lib/auth-context';
-import { useDeleteAccount, useOwnProfile, useUpdateProfile } from '../src/hooks/api-hooks';
+import { useDeleteAccount, useOwnProfile, useUpdatePhone, useUpdateProfile } from '../src/hooks/api-hooks';
 import { notifyConfirm, notifyInfo } from '../src/lib/notify';
+import { ApiError } from '../src/lib/api-client';
 import { colors, spacing, typography } from '../src/theme/tokens';
 
 export default function Settings() {
-  const { signOut } = useAuth();
+  const { signOut, session } = useAuth();
   const profile = useOwnProfile();
   const updateProfile = useUpdateProfile();
+  const updatePhone = useUpdatePhone();
   const deleteAccount = useDeleteAccount();
   const [deleting, setDeleting] = useState(false);
 
@@ -26,6 +28,10 @@ export default function Settings() {
   const [error, setError] = useState<string | undefined>();
   const [saved, setSaved] = useState(false);
 
+  const [phone, setPhone] = useState('');
+  const [phoneError, setPhoneError] = useState<string | undefined>();
+  const [phoneSaved, setPhoneSaved] = useState(false);
+
   useEffect(() => {
     if (profile.data) {
       setDisplayName(profile.data.displayName);
@@ -33,6 +39,7 @@ export default function Settings() {
       setInterests(profile.data.interests.join(', '));
       setLanguages(profile.data.languages.join(', '));
       setDiscoverable(profile.data.discoverable);
+      setPhone(profile.data.phone ?? '');
     }
   }, [profile.data]);
 
@@ -74,6 +81,22 @@ export default function Settings() {
     }
   };
 
+  const onSavePhone = async () => {
+    setPhoneError(undefined);
+    setPhoneSaved(false);
+    const parsed = updatePhoneRequestSchema.safeParse({ phone: phone.trim() || null });
+    if (!parsed.success) {
+      setPhoneError(parsed.error.issues[0]?.message ?? 'Enter a valid phone number');
+      return;
+    }
+    try {
+      await updatePhone.mutateAsync(parsed.data);
+      setPhoneSaved(true);
+    } catch (err) {
+      setPhoneError(err instanceof ApiError ? err.message : 'Could not save your phone number');
+    }
+  };
+
   const onDeleteAccount = () => {
     notifyConfirm(
       'Delete your account',
@@ -99,6 +122,27 @@ export default function Settings() {
       {/* 'height' on Android, not undefined: see journeys/new.tsx for why. */}
       <KeyboardAvoidingView style={styles.keyboardAvoider} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <ScrollView contentContainerStyle={styles.scroll}>
+          <Text style={styles.sectionTitle}>Account</Text>
+          <View style={styles.accountRow}>
+            <Text style={styles.accountEmail}>{session?.user.email}</Text>
+            <Text style={session?.user.email_confirmed_at ? styles.verifiedBadge : styles.unverifiedBadge}>
+              {session?.user.email_confirmed_at ? 'Verified' : 'Not verified'}
+            </Text>
+          </View>
+          <TextField
+            label="Phone number (optional)"
+            placeholder="+14155552671"
+            keyboardType="phone-pad"
+            value={phone}
+            onChangeText={setPhone}
+          />
+          <Text style={styles.hint}>Not verified — used for account recovery and important notices only.</Text>
+          {phoneError ? <Text style={styles.error}>{phoneError}</Text> : null}
+          {phoneSaved ? <Text style={styles.saved}>Saved!</Text> : null}
+          <Button label="Save phone number" variant="secondary" onPress={onSavePhone} loading={updatePhone.isPending} />
+
+          <View style={styles.divider} />
+
           <Text style={styles.sectionTitle}>Profile</Text>
         <TextField label="Display name" value={displayName} onChangeText={setDisplayName} />
         <TextField
@@ -154,6 +198,15 @@ const styles = StyleSheet.create({
   keyboardAvoider: { flex: 1 },
   scroll: { paddingVertical: spacing.lg, paddingBottom: spacing.xxl },
   sectionTitle: { ...typography.subtitle, color: colors.textPrimary, marginBottom: spacing.sm },
+  accountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.md,
+  },
+  accountEmail: { ...typography.body, color: colors.textPrimary },
+  verifiedBadge: { ...typography.caption, color: colors.success, fontWeight: '600' },
+  unverifiedBadge: { ...typography.caption, color: colors.warning, fontWeight: '600' },
   switchRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.lg },
   switchLabel: { ...typography.body, color: colors.textPrimary },
   switchHint: { ...typography.caption, color: colors.textSecondary, marginTop: 2 },

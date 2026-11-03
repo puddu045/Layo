@@ -22,6 +22,7 @@ interface AuthContextValue {
   signUp: (email: string, password: string) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
+  resendConfirmation: (email: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -85,6 +86,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
       },
       signOut: async () => {
         await supabase.auth.signOut();
+      },
+      resendConfirmation: async (email) => {
+        const { error } = await supabase.auth.resend({ type: 'signup', email });
+        if (error) throw error;
       },
     }),
     [session, loading, hasProfile, profileError],

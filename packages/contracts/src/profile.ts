@@ -54,5 +54,20 @@ export const ownProfileSchema = publicProfileSchema.extend({
   discoverable: z.boolean(),
   createdAt: z.string(),
   updatedAt: z.string(),
+  /// From the User table, not Profile — captured but not verified, never exposed publicly.
+  phone: z.string().optional(),
 });
 export type OwnProfile = z.infer<typeof ownProfileSchema>;
+
+/** Loosely E.164: an optional leading `+`, then 7–15 digits — permissive enough for real
+ * international numbers without pretending to fully validate them (that needs a verified SMS
+ * round-trip, which this app doesn't do). */
+export const phoneSchema = z
+  .string()
+  .trim()
+  .regex(/^\+?[1-9]\d{6,14}$/, 'Enter a valid phone number, e.g. +14155552671');
+
+export const updatePhoneRequestSchema = z.object({
+  phone: phoneSchema.nullable(),
+});
+export type UpdatePhoneRequest = z.infer<typeof updatePhoneRequestSchema>;

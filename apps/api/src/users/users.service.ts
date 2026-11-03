@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { UserStatus } from '@layo/db';
+import { Prisma, UserStatus } from '@layo/db';
 import type {
   AdminUserDetail,
   AdminUserListItem,
@@ -46,8 +46,9 @@ export class UsersService {
         photoUrl: dto.photoUrl,
       },
     });
+    const user = await this.prisma.client.user.findUniqueOrThrow({ where: { id: userId }, select: { phone: true } });
 
-    return this.toOwnProfile(profile);
+    return this.toOwnProfile(profile, user.phone);
   }
 
   async updateProfile(userId: string, dto: UpdateProfileRequest): Promise<OwnProfile> {
@@ -73,14 +74,31 @@ export class UsersService {
         ...(dto.photoUrl !== undefined && { photoUrl: dto.photoUrl }),
       },
     });
+    const user = await this.prisma.client.user.findUniqueOrThrow({ where: { id: userId }, select: { phone: true } });
 
-    return this.toOwnProfile(profile);
+    return this.toOwnProfile(profile, user.phone);
   }
 
   async getOwnProfile(userId: string): Promise<OwnProfile> {
     const profile = await this.prisma.client.profile.findUnique({ where: { userId } });
     if (!profile) throw new NotFoundException('Profile not found — complete profile setup first');
-    return this.toOwnProfile(profile);
+    const user = await this.prisma.client.user.findUniqueOrThrow({ where: { id: userId }, select: { phone: true } });
+    return this.toOwnProfile(profile, user.phone);
+  }
+
+  /** Captured but not verified — see `Settings`. `phone: null` clears it. Phones double as a
+   * weak uniqueness signal like email, so a conflict here is a real `ConflictException`, not a
+   * silent overwrite. */
+  async updatePhone(userId: string, phone: string | null): Promise<OwnProfile> {
+    try {
+      await this.prisma.client.user.update({ where: { id: userId }, data: { phone } });
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        throw new ConflictException('This phone number is already associated with another account');
+      }
+      throw err;
+    }
+    return this.getOwnProfile(userId);
   }
 
   /** Public-facing view: never includes date of birth or any contact detail. */
@@ -233,6 +251,7 @@ export class UsersService {
 
   private toOwnProfile(
     profile: ProfileRow & { discoverable: boolean; createdAt: Date; updatedAt: Date },
+    phone: string | null,
   ): OwnProfile {
     return {
       ...toPublicProfile(profile),
@@ -240,6 +259,7 @@ export class UsersService {
       discoverable: profile.discoverable,
       createdAt: profile.createdAt.toISOString(),
       updatedAt: profile.updatedAt.toISOString(),
+      phone: phone ?? undefined,
     };
   }
 }
