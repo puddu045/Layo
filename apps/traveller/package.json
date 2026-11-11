@@ -9,6 +9,7 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "build": "expo export --platform web",
+    "start": "serve dist -s -l ${PORT:-3000}",
     "typecheck": "tsc --noEmit",
     "lint": "eslint \"app/**/*.{ts,tsx}\" \"src/**/*.{ts,tsx}\" --ext .ts,.tsx",
     "test": "echo \"(no unit tests in traveller app yet — logic lives in @layo/contracts and apps/api)\""
@@ -40,6 +41,7 @@
     "react-native-screens": "4.30.1",
     "react-native-url-polyfill": "^2.0.0",
     "react-native-web": "~0.21.4",
+    "serve": "^14.2.7",
     "socket.io-client": "^4.8.1",
     "zod": "^3.24.1"
   },
