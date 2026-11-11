@@ -5,6 +5,7 @@ import { flightLookupRequestSchema, manualFlightEntrySchema, type AddJourneySegm
 import { ScreenContainer } from '../../src/components/ScreenContainer';
 import { TextField } from '../../src/components/TextField';
 import { DatePickerField } from '../../src/components/DatePickerField';
+import { DateTimePickerField } from '../../src/components/DateTimePickerField';
 import { Button } from '../../src/components/Button';
 import { Card } from '../../src/components/Card';
 import { useCreateJourney, useFlightLookup } from '../../src/hooks/api-hooks';
@@ -234,17 +235,15 @@ export default function NewJourney() {
               value={manual.arrivalAirportIata}
               onChangeText={(v) => setManual((m) => ({ ...m, arrivalAirportIata: v }))}
             />
-            <TextField
-              label="Scheduled departure (UTC, ISO)"
-              placeholder="2026-11-20T22:00:00Z"
+            <DateTimePickerField
+              label="Scheduled departure"
               value={manual.scheduledDepartureUtc}
-              onChangeText={(v) => setManual((m) => ({ ...m, scheduledDepartureUtc: v }))}
+              onChange={(v) => setManual((m) => ({ ...m, scheduledDepartureUtc: v }))}
             />
-            <TextField
-              label="Scheduled arrival (UTC, ISO)"
-              placeholder="2026-11-21T08:30:00Z"
+            <DateTimePickerField
+              label="Scheduled arrival"
               value={manual.scheduledArrivalUtc}
-              onChangeText={(v) => setManual((m) => ({ ...m, scheduledArrivalUtc: v }))}
+              onChange={(v) => setManual((m) => ({ ...m, scheduledArrivalUtc: v }))}
             />
             <Button label="Add manual flight" onPress={addManual} variant="secondary" />
           </Card>

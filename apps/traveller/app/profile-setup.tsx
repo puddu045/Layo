@@ -1,13 +1,18 @@
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { router } from 'expo-router';
-import { createProfileRequestSchema } from '@layo/contracts';
+import { createProfileRequestSchema, MIN_SIGNUP_AGE_YEARS } from '@layo/contracts';
 import { ScreenContainer } from '../src/components/ScreenContainer';
 import { TextField } from '../src/components/TextField';
+import { DatePickerField } from '../src/components/DatePickerField';
 import { Button } from '../src/components/Button';
 import { useAuth } from '../src/lib/auth-context';
 import { useCreateProfile } from '../src/hooks/api-hooks';
 import { colors, spacing, typography } from '../src/theme/tokens';
+
+const today = new Date();
+const maxDob = new Date(today.getFullYear() - MIN_SIGNUP_AGE_YEARS, today.getMonth(), today.getDate());
+const minDob = new Date(today.getFullYear() - 100, today.getMonth(), today.getDate());
 
 export default function ProfileSetup() {
   const { refreshProfileStatus } = useAuth();
@@ -58,12 +63,12 @@ export default function ProfileSetup() {
         </Text>
 
         <TextField label="Display name" value={displayName} onChangeText={setDisplayName} />
-        <TextField
-          label="Date of birth (YYYY-MM-DD)"
-          placeholder="1995-06-15"
+        <DatePickerField
+          label="Date of birth"
           value={dateOfBirth}
-          onChangeText={setDateOfBirth}
-          keyboardType="numbers-and-punctuation"
+          onChange={setDateOfBirth}
+          minimumDate={minDob}
+          maximumDate={maxDob}
         />
         <TextField
           label="Bio"
