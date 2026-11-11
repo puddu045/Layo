@@ -206,8 +206,18 @@ async function seedDemoJourneys() {
   console.log(`Seeded ${DEMO_JOURNEY_FIXTURES.length} demo travellers with multi-segment journeys.`);
 }
 
+/** `pnpm db:seed:reference` (or `--reference-only`) seeds only real reference data — airlines,
+ * airports, airport rooms — with none of the fictional demo accounts/journeys. This is what a
+ * real environment (production, or anyone else's local setup who doesn't want fake travellers)
+ * should run; `pnpm db:seed` keeps the full demo-data behaviour for this project's own dev use. */
 async function main() {
+  const referenceOnly = process.argv.includes('--reference-only');
+
   await seedReferenceData();
+  if (referenceOnly) {
+    console.log('Reference-only seed: skipping demo accounts/journeys.');
+    return;
+  }
   await seedSupabaseAuthUsers();
   await seedDemoJourneys();
 }
