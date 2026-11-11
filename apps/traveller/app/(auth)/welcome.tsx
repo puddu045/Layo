@@ -3,6 +3,7 @@ import {
   Animated,
   Easing,
   Image,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -76,7 +77,7 @@ function PitchRow({
 
 function PitchList() {
   return (
-    <Card>
+    <Card variant="glass">
       <View>
         {PITCH_ITEMS.map((item, index) => (
           <PitchRow key={item.text} item={item} index={index} divider={index > 0} />
@@ -150,7 +151,7 @@ function PitchCarousel() {
 
   return (
     <View>
-      <Card>
+      <Card variant="glass">
         <Animated.View style={[styles.carouselRow, { opacity: fade }]}>
           <PitchRow item={PITCH_ITEMS[index]} index={index} divider={false} centered />
         </Animated.View>
@@ -242,6 +243,19 @@ export default function Welcome() {
         style={StyleSheet.absoluteFill}
       />
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+        {/* A safety net, not the primary mechanism: the adaptive sizing above (showHeroArt,
+            showFullList) is what's supposed to make everything fit without scrolling. But its
+            measurements come from this device's own onLayout passes, so anything it doesn't
+            predict exactly right (a font metric quirk, a screen shorter than anyone tested)
+            previously meant the hero got silently squeezed past the top edge with no way to
+            reach it. `minHeight: height` on the content container keeps the layout pixel-
+            identical whenever things already fit (nothing to scroll, same as before) — it only
+            starts scrolling once content genuinely exceeds the viewport, trading "permanently
+            cut off" for "scroll to see the rest". */}
+        <ScrollView
+          contentContainerStyle={{ minHeight: height }}
+          showsVerticalScrollIndicator={false}
+        >
         {/* Capped and centred, not full width — on a wide screen a stretched card just leaves its
             left-aligned pitch text stranded with a lot of empty card beside it, and centring that
             text instead reads as jagged across three differently-long lines. Capping the whole
@@ -328,6 +342,7 @@ export default function Welcome() {
           resizeMode="cover"
           style={[styles.airportImage, { height: airportImageHeight, maxWidth: airportImageMaxWidth }]}
         />
+        </ScrollView>
       </SafeAreaView>
     </View>
   );
