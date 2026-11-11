@@ -239,6 +239,34 @@ export class UsersService {
         await this.prisma.client.user.update({ where: { id: userId }, data: { verifiedAt: new Date() } });
         await this.notificationsService.create(userId, 'ACCOUNT_VERIFIED', {});
         break;
+      case 'DELETE':
+        // Erases personally-identifying data rather than the row itself — messages, reports and
+        // audit history that reference this user (sent to other people, filed by other admins)
+        // stay intact, same reasoning as `deleteOwnAccount`'s own "rows are kept" rule. Status
+        // flip alone (same as `deleteOwnAccount`) is what actually locks them out via
+        // `SupabaseAuthGuard`; the rest here is the "completely" part — scrubbing the profile.
+        await this.prisma.client.profile.updateMany({
+          where: { userId },
+          data: {
+            displayName: 'Deleted user',
+            bio: '',
+            photoUrl: null,
+            interests: [],
+            languages: [],
+            homeCityIata: null,
+            discoverable: false,
+          },
+        });
+        await this.prisma.client.user.update({
+          where: { id: userId },
+          data: {
+            status: UserStatus.DELETED,
+            deletedAt: new Date(),
+            email: `deleted-${userId}@deleted.layo.app`,
+            phone: null,
+          },
+        });
+        break;
     }
 
     await this.auditLogService.record(adminId, action, 'User', userId, { reason });

@@ -17,6 +17,7 @@ export const notificationTypeSchema = z.enum([
   'APPEAL_RESOLVED',
   'ROOM_MUTED',
   'REPORT_ESCALATED',
+  'MESSAGE_NEW',
 ]);
 export type NotificationType = z.infer<typeof notificationTypeSchema>;
 

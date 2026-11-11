@@ -163,22 +163,29 @@ export default function ChatScreen() {
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           keyboardVerticalOffset={90}
         >
-          <FlatList
-            inverted
-            data={messages.data?.items ?? []}
-            keyExtractor={(item) => item.id}
-            contentContainerStyle={styles.listContent}
-            renderItem={({ item }) => (
-              <MessageBubble
-                message={item}
-                isMine={item.senderId === session?.user.id}
-                onLongPress={() => onReportMessage(item)}
-              />
-            )}
-            ListEmptyComponent={
+          {(messages.data?.items.length ?? 0) === 0 ? (
+            // Rendered outside the inverted FlatList on purpose: a `ListEmptyComponent` sits
+            // inside the list's own inverted layout, so a counter-transform to keep its text
+            // upright can come out mirrored depending on platform. A plain, non-inverted view
+            // has no inversion to counteract in the first place.
+            <View style={styles.emptyWrap}>
               <Text style={styles.emptyText}>No messages yet — say hello!</Text>
-            }
-          />
+            </View>
+          ) : (
+            <FlatList
+              inverted
+              data={messages.data?.items ?? []}
+              keyExtractor={(item) => item.id}
+              contentContainerStyle={styles.listContent}
+              renderItem={({ item }) => (
+                <MessageBubble
+                  message={item}
+                  isMine={item.senderId === session?.user.id}
+                  onLongPress={() => onReportMessage(item)}
+                />
+              )}
+            />
+          )}
 
           {blockedByMe ? (
             <View style={styles.blockedBar}>
@@ -247,12 +254,11 @@ function MessageBubble({
 
 const styles = StyleSheet.create({
   listContent: { paddingHorizontal: spacing.lg, paddingVertical: spacing.md, flexGrow: 1 },
+  emptyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.lg },
   emptyText: {
     ...typography.body,
     color: colors.textSecondary,
     textAlign: 'center',
-    marginTop: spacing.xl,
-    transform: [{ scaleY: -1 }], // list is inverted; flip the empty-state text back upright
   },
   bubbleRow: { marginBottom: spacing.sm, maxWidth: '80%' },
   bubbleRowMine: { alignSelf: 'flex-end', alignItems: 'flex-end' },

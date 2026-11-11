@@ -62,8 +62,15 @@ export function useSendMessage(connectionId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (body: string) => api.post<Message>(`/connections/${connectionId}/messages`, { body }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['messages', connectionId] });
+    onSuccess: (message) => {
+      // Write the server's response straight into page 1 of the cache instead of invalidating
+      // and waiting for a refetch — invalidating alone meant the sender's own bubble only
+      // appeared after a *second* network round trip, which read as a visible lag on send.
+      queryClient.setQueryData<PaginatedResponse<Message>>(['messages', connectionId, 1], (old) => {
+        if (!old) return old;
+        if (old.items.some((m) => m.id === message.id)) return old;
+        return { ...old, items: [message, ...old.items], total: old.total + 1 };
+      });
       queryClient.invalidateQueries({ queryKey: ['connections'] });
     },
   });

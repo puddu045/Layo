@@ -78,7 +78,7 @@ export const adminUserDetailSchema = adminUserListItemSchema.extend({
 });
 export type AdminUserDetail = z.infer<typeof adminUserDetailSchema>;
 
-export const userModerationActionSchema = z.enum(['WARN', 'SUSPEND', 'BAN', 'REINSTATE', 'VERIFY']);
+export const userModerationActionSchema = z.enum(['WARN', 'SUSPEND', 'BAN', 'REINSTATE', 'VERIFY', 'DELETE']);
 export type UserModerationAction = z.infer<typeof userModerationActionSchema>;
 
 export const userModerationRequestSchema = z.object({

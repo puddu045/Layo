@@ -52,6 +52,23 @@ export class NotificationsService {
     };
   }
 
+  /** Used by `MessagingService` when a conversation is marked read, so a `MESSAGE_NEW`
+   * notification doesn't keep sitting unread in the bell once the recipient has actually opened
+   * that chat — without this, every message would leave a permanent unread notification behind
+   * even though the person already saw it. Matches on the connectionId recorded in the
+   * notification's own payload at creation time. */
+  async markReadForConnection(userId: string, connectionId: string): Promise<void> {
+    await this.prisma.client.notification.updateMany({
+      where: {
+        userId,
+        type: 'MESSAGE_NEW',
+        readAt: null,
+        payload: { path: ['connectionId'], equals: connectionId },
+      },
+      data: { readAt: new Date() },
+    });
+  }
+
   async markRead(userId: string, notificationId: string): Promise<{ success: true }> {
     await this.prisma.client.notification.updateMany({
       where: { id: notificationId, userId, readAt: null },

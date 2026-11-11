@@ -19,13 +19,17 @@ export default function UserDetailPage() {
 
   useEffect(refresh, [id]);
 
-  const act = async (action: 'warn' | 'suspend' | 'ban' | 'reinstate' | 'verify', confirmMessage?: string) => {
+  const act = async (
+    action: 'warn' | 'suspend' | 'ban' | 'reinstate' | 'verify' | 'delete',
+    confirmMessage?: string,
+  ) => {
     if (confirmMessage && !window.confirm(confirmMessage)) return;
     setActing(true);
     try {
       await api.patch(`/users/${id}/${action}`, action === 'verify' ? undefined : { reason: reason || undefined });
       setReason('');
       refresh();
+      if (action === 'delete') router.push('/dashboard/users');
     } finally {
       setActing(false);
     }
@@ -79,6 +83,19 @@ export default function UserDetailPage() {
             )}
             {user.status === 'SUSPENDED' && (
               <ActionButton label="Reinstate" onClick={() => act('reinstate')} disabled={acting} />
+            )}
+            {user.status !== 'DELETED' && (
+              <ActionButton
+                label="Delete profile completely"
+                danger
+                onClick={() =>
+                  act(
+                    'delete',
+                    'Permanently delete this profile? Their display name, bio, photo and contact details will be erased and they will be signed out immediately. This cannot be undone.',
+                  )
+                }
+                disabled={acting}
+              />
             )}
           </div>
         </div>

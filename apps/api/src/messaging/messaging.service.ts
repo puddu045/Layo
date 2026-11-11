@@ -5,6 +5,7 @@ import { PrismaService } from '../common/prisma/prisma.service';
 import { ConnectionsService } from '../connections/connections.service';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
 import { BlocksService } from '../safety/blocks.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class MessagingService {
@@ -13,6 +14,7 @@ export class MessagingService {
     private readonly connectionsService: ConnectionsService,
     private readonly gateway: RealtimeGateway,
     private readonly blocksService: BlocksService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async list(userId: string, connectionId: string, query: ListMessagesQuery): Promise<PaginatedResponse<Message>> {
@@ -69,6 +71,11 @@ export class MessagingService {
     const otherUserId = connection.requesterId === userId ? connection.addresseeId : connection.requesterId;
     this.gateway.emitToUser(otherUserId, socketEvents.MESSAGE_NEW, { connectionId, message });
     this.gateway.emitToUser(userId, socketEvents.MESSAGE_NEW, { connectionId, message });
+    await this.notificationsService.create(otherUserId, 'MESSAGE_NEW', {
+      connectionId,
+      fromUserId: userId,
+      preview: dto.body.slice(0, 120),
+    });
 
     return message;
   }
@@ -80,6 +87,8 @@ export class MessagingService {
       where: { connectionId, senderId: { not: userId }, readAt: null },
       data: { readAt: new Date() },
     });
+
+    await this.notificationsService.markReadForConnection(userId, connectionId);
 
     if (result.count > 0) {
       const otherUserId = connection.requesterId === userId ? connection.addresseeId : connection.requesterId;

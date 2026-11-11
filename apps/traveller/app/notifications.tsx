@@ -55,6 +55,15 @@ function describe(n: Notification): { title: string; body: string; onPress?: () 
         body: status === 'APPROVED' ? 'Your deal is now live for travellers.' : `Your deal was rejected${reason}.`,
       };
     }
+    case 'MESSAGE_NEW': {
+      const connectionId = String(n.payload.connectionId ?? '');
+      const preview = n.payload.preview ? String(n.payload.preview) : undefined;
+      return {
+        title: 'New message',
+        body: preview ?? 'You have a new message.',
+        onPress: connectionId ? () => router.push(`/chat/${connectionId}`) : undefined,
+      };
+    }
     case 'REPORT_WARNING':
       return {
         title: 'Multiple people have reported you',

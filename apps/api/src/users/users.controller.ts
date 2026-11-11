@@ -123,4 +123,14 @@ export class UsersController {
   verify(@CurrentUser() admin: RequestUser, @Param('userId') userId: string) {
     return this.usersService.applyModerationAction(admin.id, userId, 'VERIFY');
   }
+
+  @Patch('users/:userId/delete')
+  @UseGuards(AdminGuard, RoleGuard('MODERATOR'))
+  deleteUser(
+    @CurrentUser() admin: RequestUser,
+    @Param('userId') userId: string,
+    @Body(new ZodValidationPipe(userModerationRequestSchema)) dto: UserModerationRequest,
+  ) {
+    return this.usersService.applyModerationAction(admin.id, userId, 'DELETE', dto.reason);
+  }
 }
