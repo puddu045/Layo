@@ -5,7 +5,7 @@
   "description": "Layo - social networking platform for air travellers (monorepo)",
   "packageManager": "pnpm@9.15.0",
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=22.13.0"
   },
   "scripts": {
     "postinstall": "pnpm --filter @layo/db generate",
