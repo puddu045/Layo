@@ -50,7 +50,7 @@ export class SupabaseAuthGuard implements CanActivate {
     }
 
     const token = authHeader.slice('Bearer '.length);
-    const identity = this.supabase.verifyAccessToken(token);
+    const identity = await this.supabase.verifyAccessToken(token);
     if (!identity) {
       throw new UnauthorizedException('Invalid or expired session');
     }
