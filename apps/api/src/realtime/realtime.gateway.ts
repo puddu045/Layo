@@ -53,7 +53,7 @@ export class RealtimeGateway implements OnGatewayInit {
       const token = this.extractToken(socket);
       if (!token) return next(new Error('Missing auth token'));
 
-      const identity = await this.supabase.verifyAccessToken(token);
+      const identity = this.supabase.verifyAccessToken(token);
       if (!identity) return next(new Error('Invalid or expired session'));
 
       socket.data.userId = identity.id;

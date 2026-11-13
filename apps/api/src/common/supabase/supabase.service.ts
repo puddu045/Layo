@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import jwt from 'jsonwebtoken';
 import { loadApiEnv } from '@layo/config';
 
 export interface AuthenticatedUser {
@@ -14,18 +15,36 @@ export interface AuthenticatedUser {
 @Injectable()
 export class SupabaseService {
   readonly admin: SupabaseClient;
+  private readonly jwtSecret: string;
 
   constructor() {
     const env = loadApiEnv();
     this.admin = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
+    this.jwtSecret = env.SUPABASE_JWT_SECRET;
   }
 
-  /** Verifies a bearer access token against Supabase and returns the identity it belongs to. */
-  async verifyAccessToken(accessToken: string): Promise<AuthenticatedUser | null> {
-    const { data, error } = await this.admin.auth.getUser(accessToken);
-    if (error || !data.user?.email) return null;
-    return { id: data.user.id, email: data.user.email };
+  /** Verifies a bearer access token's signature and expiry locally against the project's JWT
+   * secret — this used to call Supabase Auth's `getUser` API on every single request (and every
+   * socket handshake), which meant every request in the app depended on a live round trip to
+   * Supabase's own Auth service. Supabase's access tokens are HS256-signed with this secret
+   * specifically so a backend can verify them without that call (this is Supabase's own
+   * documented approach) — same guarantees (valid signature + not expired), no network hop. */
+  verifyAccessToken(accessToken: string): AuthenticatedUser | null {
+    try {
+      const payload = jwt.verify(accessToken, this.jwtSecret, { algorithms: ['HS256'] });
+      if (
+        typeof payload !== 'object' ||
+        payload.aud !== 'authenticated' ||
+        typeof payload.sub !== 'string' ||
+        typeof payload.email !== 'string'
+      ) {
+        return null;
+      }
+      return { id: payload.sub, email: payload.email };
+    } catch {
+      return null;
+    }
   }
 }

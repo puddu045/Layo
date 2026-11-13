@@ -50,7 +50,7 @@ export class SupabaseAuthGuard implements CanActivate {
     }
 
     const token = authHeader.slice('Bearer '.length);
-    const identity = await this.supabase.verifyAccessToken(token);
+    const identity = this.supabase.verifyAccessToken(token);
     if (!identity) {
       throw new UnauthorizedException('Invalid or expired session');
     }
@@ -65,11 +65,16 @@ export class SupabaseAuthGuard implements CanActivate {
       throw new UnauthorizedException('This account is banned');
     }
 
-    const user = await this.prisma.client.user.upsert({
-      where: { id: identity.id },
-      create: { id: identity.id, email: identity.email },
-      update: { email: identity.email },
-    });
+    // A plain findUnique, not an upsert, on the hot path: email practically never changes
+    // between requests, so unconditionally upserting meant writing to Postgres (and bumping
+    // `updatedAt`) on every single authenticated request in the app, for no actual change most
+    // of the time. The write only happens below, for the two cases that actually need one.
+    let user = await this.prisma.client.user.findUnique({ where: { id: identity.id } });
+    if (!user) {
+      user = await this.prisma.client.user.create({ data: { id: identity.id, email: identity.email } });
+    } else if (user.email !== identity.email) {
+      user = await this.prisma.client.user.update({ where: { id: identity.id }, data: { email: identity.email } });
+    }
 
     if (user.status !== UserStatus.ACTIVE) {
       throw new UnauthorizedException('This account is no longer active');
