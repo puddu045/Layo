@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import type { AirportRoomSummary } from '@layo/contracts';
 import { ScreenContainer } from '../../src/components/ScreenContainer';
 import { Card } from '../../src/components/Card';
+import { TopBarIcons } from '../../src/components/TopBarIcons';
 import { EmptyState, ErrorState, LoadingState } from '../../src/components/StateViews';
 import { useMyAirportRooms } from '../../src/hooks/airport-room-hooks';
 import { colors, radius, spacing, typography } from '../../src/theme/tokens';
@@ -25,8 +26,11 @@ export default function AirportHub() {
   return (
     <ScreenContainer>
       <View style={styles.header}>
-        <Text style={styles.title}>Airport Hub</Text>
-        <Text style={styles.subtitle}>Airport chats, updates and tips</Text>
+        <View>
+          <Text style={styles.title}>Airport Hub</Text>
+          <Text style={styles.subtitle}>Airport chats, updates and tips</Text>
+        </View>
+        <TopBarIcons />
       </View>
 
       {rooms.isLoading ? (
@@ -98,7 +102,13 @@ function RoomCard({ room }: { room: AirportRoomSummary }) {
 }
 
 const styles = StyleSheet.create({
-  header: { paddingTop: spacing.md, paddingBottom: spacing.sm },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: spacing.md,
+    paddingBottom: spacing.sm,
+  },
   title: { ...typography.display, color: colors.primaryDark },
   subtitle: { ...typography.caption, color: colors.textSecondary, marginTop: 2 },
   card: { marginBottom: spacing.md },

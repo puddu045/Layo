@@ -40,6 +40,12 @@
         {
           "color": "#2878C7"
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Layo needs access to your photos so you can set a profile picture."
+        }
       ]
     ],
     "experiments": {

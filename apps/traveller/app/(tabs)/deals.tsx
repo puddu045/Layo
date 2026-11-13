@@ -7,6 +7,7 @@ import type { Deal } from '@layo/contracts';
 import { ScreenContainer } from '../../src/components/ScreenContainer';
 import { Card } from '../../src/components/Card';
 import { Chip } from '../../src/components/Chip';
+import { TopBarIcons } from '../../src/components/TopBarIcons';
 import { EmptyState, ErrorState, LoadingState } from '../../src/components/StateViews';
 import { useMyDeals } from '../../src/hooks/deal-hooks';
 import { notifyInfo } from '../../src/lib/notify';
@@ -62,8 +63,11 @@ export default function Deals() {
   return (
     <ScreenContainer>
       <View style={styles.header}>
-        <Text style={styles.title}>Deals</Text>
-        <Text style={styles.subtitle}>Exclusive offers at your airports</Text>
+        <View>
+          <Text style={styles.title}>Deals</Text>
+          <Text style={styles.subtitle}>Exclusive offers at your airports</Text>
+        </View>
+        <TopBarIcons />
       </View>
 
       {deals.isLoading ? (
@@ -164,7 +168,13 @@ function DealCard({ deal }: { deal: Deal }) {
 }
 
 const styles = StyleSheet.create({
-  header: { paddingTop: spacing.md, paddingBottom: spacing.sm },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: spacing.md,
+    paddingBottom: spacing.sm,
+  },
   title: { ...typography.display, color: colors.primaryDark },
   subtitle: { ...typography.caption, color: colors.textSecondary, marginTop: 2 },
   filterRow: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: spacing.xs },

@@ -1,15 +1,15 @@
 import { useState } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
-import { Link, router } from 'expo-router';
+import { FlatList, StyleSheet, Text, View } from 'react-native';
+import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import type { MatchCategory } from '@layo/contracts';
 import { ScreenContainer } from '../../src/components/ScreenContainer';
 import { MatchCard } from '../../src/components/MatchCard';
 import { Chip } from '../../src/components/Chip';
+import { TopBarIcons } from '../../src/components/TopBarIcons';
 import { EmptyState, ErrorState, LoadingState } from '../../src/components/StateViews';
 import { useDiscover, useJourneys } from '../../src/hooks/api-hooks';
 import { useCreateConnection } from '../../src/hooks/chat-hooks';
-import { useUnreadNotificationsCount } from '../../src/hooks/notification-hooks';
 import { notifyInfo } from '../../src/lib/notify';
 import { colors, spacing, typography } from '../../src/theme/tokens';
 
@@ -25,7 +25,6 @@ export default function Discover() {
   const journeys = useJourneys();
   const discover = useDiscover({ category, page: 1, pageSize: 20 });
   const createConnection = useCreateConnection();
-  const unreadCount = useUnreadNotificationsCount();
 
   const onConnect = (userId: string) => {
     createConnection.mutate(userId, {
@@ -56,25 +55,7 @@ export default function Discover() {
             <Text style={styles.subtitle}>Find travellers around your journey</Text>
           </View>
         </View>
-        <View style={styles.headerIcons}>
-          <Link href="/notifications" asChild>
-            <Pressable hitSlop={8} style={styles.iconButton}>
-              <Ionicons name="notifications-outline" size={22} color={colors.navy900} />
-              {!!unreadCount.data && (
-                <View style={styles.badge}>
-                  <Text style={styles.badgeText}>
-                    {unreadCount.data > 9 ? '9+' : unreadCount.data}
-                  </Text>
-                </View>
-              )}
-            </Pressable>
-          </Link>
-          <Link href="/settings" asChild>
-            <Pressable hitSlop={8}>
-              <Ionicons name="settings-outline" size={22} color={colors.navy900} />
-            </Pressable>
-          </Link>
-        </View>
+        <TopBarIcons />
       </View>
 
       <View style={styles.filters}>
@@ -138,20 +119,5 @@ const styles = StyleSheet.create({
   title: { ...typography.display, color: colors.primaryDark },
   subtitleRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
   subtitle: { ...typography.caption, color: colors.textSecondary },
-  headerIcons: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-  iconButton: { position: 'relative' },
-  badge: {
-    position: 'absolute',
-    top: -4,
-    right: -6,
-    minWidth: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: colors.danger,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 3,
-  },
-  badgeText: { color: '#FFFFFF', fontSize: 10, fontWeight: '700' },
   filters: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: spacing.md },
 });

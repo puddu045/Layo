@@ -13,6 +13,7 @@ import { Stack, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import type { Message, ReportReason } from '@layo/contracts';
 import { ScreenContainer } from '../../src/components/ScreenContainer';
+import { Avatar } from '../../src/components/Avatar';
 import { ErrorState, LoadingState } from '../../src/components/StateViews';
 import { ReportReasonSheet } from '../../src/components/ReportReasonSheet';
 import {
@@ -124,6 +125,19 @@ export default function ChatScreen() {
       <Stack.Screen
         options={{
           title: connection?.otherProfile.displayName ?? 'Chat',
+          headerTitle: () => (
+            <View style={styles.headerTitle}>
+              <Avatar
+                photoUrl={connection?.otherProfile.photoUrl}
+                displayName={connection?.otherProfile.displayName ?? '?'}
+                size={30}
+                fallback="initial"
+              />
+              <Text style={styles.headerTitleText} numberOfLines={1}>
+                {connection?.otherProfile.displayName ?? 'Chat'}
+              </Text>
+            </View>
+          ),
           headerRight: () => (
             <Pressable
               onPress={blockedByMe ? onUnblock : onBlock}
@@ -253,6 +267,8 @@ function MessageBubble({
 }
 
 const styles = StyleSheet.create({
+  headerTitle: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, maxWidth: 220 },
+  headerTitleText: { ...typography.subtitle, color: colors.textPrimary, flexShrink: 1 },
   listContent: { paddingHorizontal: spacing.lg, paddingVertical: spacing.md, flexGrow: 1 },
   emptyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.lg },
   emptyText: {

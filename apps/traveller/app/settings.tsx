@@ -1,16 +1,19 @@
 import { useEffect, useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { router } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { updatePhoneRequestSchema, updateProfileRequestSchema } from '@layo/contracts';
 import { ScreenContainer } from '../src/components/ScreenContainer';
+import { Avatar } from '../src/components/Avatar';
 import { TextField } from '../src/components/TextField';
 import { Button } from '../src/components/Button';
 import { ErrorState, LoadingState } from '../src/components/StateViews';
 import { useAuth } from '../src/lib/auth-context';
 import { useDeleteAccount, useOwnProfile, useUpdatePhone, useUpdateProfile } from '../src/hooks/api-hooks';
+import { useChangeAvatar } from '../src/hooks/avatar-hooks';
 import { notifyConfirm, notifyInfo } from '../src/lib/notify';
 import { ApiError } from '../src/lib/api-client';
-import { colors, spacing, typography } from '../src/theme/tokens';
+import { colors, radius, spacing, typography } from '../src/theme/tokens';
 
 export default function Settings() {
   const { signOut, session } = useAuth();
@@ -18,6 +21,7 @@ export default function Settings() {
   const updateProfile = useUpdateProfile();
   const updatePhone = useUpdatePhone();
   const deleteAccount = useDeleteAccount();
+  const changeAvatar = useChangeAvatar();
   const [deleting, setDeleting] = useState(false);
 
   const [displayName, setDisplayName] = useState('');
@@ -97,6 +101,13 @@ export default function Settings() {
     }
   };
 
+  const onChangeAvatar = () => {
+    changeAvatar.mutate(undefined, {
+      onError: (err) =>
+        notifyInfo('Could not update photo', err instanceof Error ? err.message : 'Please try again.'),
+    });
+  };
+
   const onDeleteAccount = () => {
     notifyConfirm(
       'Delete your account',
@@ -122,6 +133,16 @@ export default function Settings() {
       {/* 'height' on Android, not undefined: see journeys/new.tsx for why. */}
       <KeyboardAvoidingView style={styles.keyboardAvoider} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <ScrollView contentContainerStyle={styles.scroll}>
+          <View style={styles.avatarSection}>
+            <Pressable onPress={onChangeAvatar} disabled={changeAvatar.isPending} style={styles.avatarPressable}>
+              <Avatar photoUrl={profile.data?.photoUrl} displayName={profile.data?.displayName ?? ''} size={96} />
+              <View style={styles.avatarEditBadge}>
+                <Ionicons name="camera" size={16} color={colors.white} />
+              </View>
+            </Pressable>
+            <Text style={styles.avatarHint}>{changeAvatar.isPending ? 'Uploading…' : 'Tap to change photo'}</Text>
+          </View>
+
           <Text style={styles.sectionTitle}>Account</Text>
           <View style={styles.accountRow}>
             <Text style={styles.accountEmail}>{session?.user.email}</Text>
@@ -197,6 +218,22 @@ export default function Settings() {
 const styles = StyleSheet.create({
   keyboardAvoider: { flex: 1 },
   scroll: { paddingVertical: spacing.lg, paddingBottom: spacing.xxl },
+  avatarSection: { alignItems: 'center', marginBottom: spacing.lg },
+  avatarPressable: { position: 'relative' },
+  avatarEditBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 28,
+    height: 28,
+    borderRadius: radius.pill,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: colors.background,
+  },
+  avatarHint: { ...typography.caption, color: colors.textSecondary, marginTop: spacing.sm },
   sectionTitle: { ...typography.subtitle, color: colors.textPrimary, marginBottom: spacing.sm },
   accountRow: {
     flexDirection: 'row',

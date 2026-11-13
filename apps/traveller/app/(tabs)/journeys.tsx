@@ -3,6 +3,7 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { ScreenContainer } from '../../src/components/ScreenContainer';
 import { JourneyCard } from '../../src/components/JourneyCard';
+import { TopBarIcons } from '../../src/components/TopBarIcons';
 import { EmptyState, ErrorState, LoadingState } from '../../src/components/StateViews';
 import { useJourneys } from '../../src/hooks/api-hooks';
 import { colors, spacing, typography } from '../../src/theme/tokens';
@@ -17,13 +18,16 @@ export default function Journeys() {
           <Text style={styles.title}>Journeys</Text>
           <Text style={styles.subtitle}>Your upcoming and planned trips</Text>
         </View>
-        <Pressable
-          onPress={() => router.push('/journeys/new')}
-          hitSlop={8}
-          style={styles.addButton}
-        >
-          <Ionicons name="add" size={22} color={colors.white} />
-        </Pressable>
+        <View style={styles.headerActions}>
+          <Pressable
+            onPress={() => router.push('/journeys/new')}
+            hitSlop={8}
+            style={styles.addButton}
+          >
+            <Ionicons name="add" size={22} color={colors.white} />
+          </Pressable>
+          <TopBarIcons />
+        </View>
       </View>
 
       {journeys.isLoading ? (
@@ -69,6 +73,7 @@ const styles = StyleSheet.create({
   },
   title: { ...typography.display, color: colors.primaryDark },
   subtitle: { ...typography.caption, color: colors.textSecondary, marginTop: 2 },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   addButton: {
     width: 40,
     height: 40,

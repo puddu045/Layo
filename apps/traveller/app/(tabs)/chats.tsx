@@ -5,6 +5,7 @@ import type { Connection } from '@layo/contracts';
 import { ScreenContainer } from '../../src/components/ScreenContainer';
 import { Card } from '../../src/components/Card';
 import { Button } from '../../src/components/Button';
+import { TopBarIcons } from '../../src/components/TopBarIcons';
 import { EmptyState, ErrorState, LoadingState } from '../../src/components/StateViews';
 import {
   useAcceptConnection,
@@ -65,8 +66,11 @@ export default function Chats() {
     return (
       <ScreenContainer>
         <View style={styles.header}>
-          <Text style={styles.title}>Chats</Text>
-          <Text style={styles.subtitle}>Your conversations and connection requests</Text>
+          <View>
+            <Text style={styles.title}>Chats</Text>
+            <Text style={styles.subtitle}>Your conversations and connection requests</Text>
+          </View>
+          <TopBarIcons />
         </View>
         <EmptyState
           title="No connections yet"
@@ -81,8 +85,11 @@ export default function Chats() {
   return (
     <ScreenContainer>
       <View style={styles.header}>
-        <Text style={styles.title}>Chats</Text>
-        <Text style={styles.subtitle}>Your conversations and connection requests</Text>
+        <View>
+          <Text style={styles.title}>Chats</Text>
+          <Text style={styles.subtitle}>Your conversations and connection requests</Text>
+        </View>
+        <TopBarIcons />
       </View>
 
       <View style={styles.tabs}>
@@ -209,7 +216,13 @@ function ConnectionRow({ connection }: { connection: Connection }) {
 
 const styles = StyleSheet.create({
   scroll: { paddingVertical: spacing.sm, paddingBottom: spacing.xl },
-  header: { paddingTop: spacing.md, paddingBottom: spacing.sm },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: spacing.md,
+    paddingBottom: spacing.sm,
+  },
   title: { ...typography.display, color: colors.primaryDark },
   subtitle: { ...typography.caption, color: colors.textSecondary, marginTop: 2 },
   tabs: {
