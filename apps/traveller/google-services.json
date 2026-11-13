@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "767821054274",
+    "project_id": "layo-aa521",
+    "storage_bucket": "layo-aa521.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:767821054274:android:e9cf6e603f9887f51c08db",
+        "android_client_info": {
+          "package_name": "com.layo.traveller"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBAUkAuUMMEaFU8wKrXjcy_sq9EnidY238"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

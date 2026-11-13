@@ -71,11 +71,20 @@ export class MessagingService {
     const otherUserId = connection.requesterId === userId ? connection.addresseeId : connection.requesterId;
     this.gateway.emitToUser(otherUserId, socketEvents.MESSAGE_NEW, { connectionId, message });
     this.gateway.emitToUser(userId, socketEvents.MESSAGE_NEW, { connectionId, message });
-    await this.notificationsService.create(otherUserId, 'MESSAGE_NEW', {
-      connectionId,
-      fromUserId: userId,
-      preview: dto.body.slice(0, 120),
-    });
+
+    // Skip the notification entirely if the recipient already has this exact conversation open
+    // live (checked via their socket's room membership) — they're looking at the message as it
+    // arrives, so a notification for it would be redundant. Any *other* conversation still
+    // notifies normally, since this check is scoped to this one connectionId.
+    const recipientIsActive = await this.gateway.isUserActiveInChat(otherUserId, connectionId);
+    if (!recipientIsActive) {
+      await this.notificationsService.createOrBumpMessageNotification(
+        otherUserId,
+        connectionId,
+        userId,
+        dto.body.slice(0, 120),
+      );
+    }
 
     return message;
   }

@@ -131,9 +131,18 @@ export function useMarkRead(connectionId: string) {
  * invalidates the relevant queries on incoming events, so open screens update
  * live instead of waiting for the next manual refetch. Safe to mount from
  * multiple screens at once — each just adds its own listener.
+ *
+ * Pass the connectionId of a chat screen that's actually open (omit it from the Chats list,
+ * which has no single "active" conversation) — this both tells the server that conversation is
+ * live for this user (via `chat:join`, so it skips raising a notification for it; see
+ * `RealtimeGateway.isUserActiveInChat`) and keeps marking incoming messages for it read the
+ * whole time the screen stays open, not just once at mount. Without the latter, messages that
+ * arrived after the screen's own one-time mark-read would still show as unread the moment you
+ * navigated back to the Chats list, even though you were looking at them the entire time.
  */
-export function useRealtimeMessages() {
+export function useRealtimeMessages(activeConnectionId?: string) {
   const queryClient = useQueryClient();
+  const markRead = useMarkRead(activeConnectionId ?? '');
 
   useEffect(() => {
     let cancelled = false;
@@ -142,9 +151,12 @@ export function useRealtimeMessages() {
     getSocket().then((socket) => {
       if (cancelled) return;
 
+      if (activeConnectionId) socket.emit('chat:join', { connectionId: activeConnectionId });
+
       const onNew = (payload: { connectionId: string }) => {
         queryClient.invalidateQueries({ queryKey: ['messages', payload.connectionId] });
         queryClient.invalidateQueries({ queryKey: ['connections'] });
+        if (payload.connectionId === activeConnectionId) markRead.mutate();
       };
       const onRead = () => {
         queryClient.invalidateQueries({ queryKey: ['connections'] });
@@ -156,6 +168,7 @@ export function useRealtimeMessages() {
       cleanup = () => {
         socket.off(socketEvents.MESSAGE_NEW, onNew);
         socket.off(socketEvents.MESSAGE_READ, onRead);
+        if (activeConnectionId) socket.emit('chat:leave', { connectionId: activeConnectionId });
       };
     });
 
@@ -163,5 +176,7 @@ export function useRealtimeMessages() {
       cancelled = true;
       cleanup?.();
     };
-  }, [queryClient]);
+    // `markRead` is intentionally not a dependency here — it's a fresh mutation object every
+    // render, and depending on it would tear down and rejoin the socket room constantly.
+  }, [queryClient, activeConnectionId]);
 }

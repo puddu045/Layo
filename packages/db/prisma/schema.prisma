@@ -71,8 +71,25 @@ model User {
   notifications          Notification[]
   auditLogEntries        AuditLog[]
   identitiesBanned       BannedIdentity[]
+  pushTokens             PushToken[]
 
   @@index([status])
+}
+
+/// One row per device that registered for push notifications — a device, not a session: the
+/// same physical phone keeps the same Expo push token across sign-ins, so logging in as a
+/// different user on it re-points this same row's `userId` rather than creating a duplicate
+/// (see `PushTokensService.register`'s upsert-by-token).
+model PushToken {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  platform  String // 'ios' | 'android'
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
 }
 
 /// Public-facing traveller profile. Never exposes date of birth directly — only

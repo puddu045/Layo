@@ -7,6 +7,7 @@ import { useFonts } from 'expo-font';
 import { Pacifico_400Regular } from '@expo-google-fonts/pacifico';
 import { queryClient } from '../src/lib/query-client';
 import { AuthProvider, useAuth } from '../src/lib/auth-context';
+import { usePushNotifications } from '../src/hooks/push-notification-hooks';
 import { colors } from '../src/theme/tokens';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -38,6 +39,11 @@ function SessionGuard() {
   return null;
 }
 
+function PushNotifications() {
+  usePushNotifications();
+  return null;
+}
+
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({ Pacifico_400Regular });
 
@@ -51,6 +57,7 @@ export default function RootLayout() {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <SessionGuard />
+        <PushNotifications />
         <StatusBar style="dark" />
         <Stack
           screenOptions={{

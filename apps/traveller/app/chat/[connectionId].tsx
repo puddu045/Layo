@@ -31,7 +31,7 @@ import { colors, radius, spacing, typography } from '../../src/theme/tokens';
 export default function ChatScreen() {
   const { connectionId } = useLocalSearchParams<{ connectionId: string }>();
   const { session } = useAuth();
-  useRealtimeMessages();
+  useRealtimeMessages(connectionId);
 
   const connections = useConnections();
   const connection = connections.data?.find((c) => c.id === connectionId);

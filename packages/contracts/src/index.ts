@@ -13,3 +13,4 @@ export * from './deal';
 export * from './report';
 export * from './notification';
 export * from './admin';
+export * from './push-token';

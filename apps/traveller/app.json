@@ -22,7 +22,8 @@
         "backgroundColor": "#0B2545"
       },
       "package": "com.layo.traveller",
-      "softwareKeyboardLayoutMode": "pan"
+      "softwareKeyboardLayoutMode": "pan",
+      "googleServicesFile": "./google-services.json"
     },
     "web": {
       "bundler": "metro",
@@ -33,7 +34,13 @@
       "expo-router",
       "expo-font",
       "expo-splash-screen",
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      [
+        "expo-notifications",
+        {
+          "color": "#2878C7"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

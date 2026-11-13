@@ -24,6 +24,7 @@ import { DealsModule } from './deals/deals.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { AdminModule } from './admin/admin.module';
 import { SupportModule } from './support/support.module';
+import { PushTokensModule } from './push-tokens/push-tokens.module';
 
 @Module({
   imports: [
@@ -49,6 +50,7 @@ import { SupportModule } from './support/support.module';
     NotificationsModule,
     SupportModule,
     AdminModule,
+    PushTokensModule,
   ],
   controllers: [AppController],
   providers: [

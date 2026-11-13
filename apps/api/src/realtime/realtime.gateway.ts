@@ -87,6 +87,36 @@ export class RealtimeGateway implements OnGatewayInit {
     return { ok: true };
   }
 
+  /** A socket joins `chat:<connectionId>` for as long as that private conversation's screen is
+   * open — `MessagingService` checks `isUserActiveInChat` before raising a MESSAGE_NEW
+   * notification for the recipient, so the conversation they're already looking at live doesn't
+   * also notify them, while any *other* conversation still does. */
+  @SubscribeMessage('chat:join')
+  async handleChatJoin(@ConnectedSocket() client: Socket, @MessageBody() payload: { connectionId?: string }) {
+    const userId = client.data.userId as string | undefined;
+    const connectionId = payload?.connectionId;
+    if (!userId || !connectionId) return { ok: false, reason: 'Missing connectionId' };
+
+    const connection = await this.prisma.client.connection.findUnique({ where: { id: connectionId } });
+    const isParticipant = !!connection && (connection.requesterId === userId || connection.addresseeId === userId);
+    if (!isParticipant) return { ok: false, reason: 'You are not a participant in this conversation' };
+
+    await client.join(`chat:${connectionId}`);
+    return { ok: true };
+  }
+
+  @SubscribeMessage('chat:leave')
+  async handleChatLeave(@ConnectedSocket() client: Socket, @MessageBody() payload: { connectionId?: string }) {
+    if (payload?.connectionId) await client.leave(`chat:${payload.connectionId}`);
+    return { ok: true };
+  }
+
+  /** Whether `userId` currently has this exact conversation open in a connected socket. */
+  async isUserActiveInChat(userId: string, connectionId: string): Promise<boolean> {
+    const sockets = await this.server.in(`chat:${connectionId}`).fetchSockets();
+    return sockets.some((socket) => socket.data.userId === userId);
+  }
+
   emitToUser(userId: string, event: string, payload: unknown) {
     this.server.to(`user:${userId}`).emit(event, payload);
   }

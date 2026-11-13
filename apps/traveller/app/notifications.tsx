@@ -58,8 +58,12 @@ function describe(n: Notification): { title: string; body: string; onPress?: () 
     case 'MESSAGE_NEW': {
       const connectionId = String(n.payload.connectionId ?? '');
       const preview = n.payload.preview ? String(n.payload.preview) : undefined;
+      const count = Number(n.payload.count) || 1;
       return {
-        title: 'New message',
+        // Several messages from the same conversation bump one notification in place (see
+        // `NotificationsService.createOrBumpMessageNotification`) rather than piling up a
+        // separate row per message — this just reflects that count back once there's more than one.
+        title: count > 1 ? `${count} new messages` : 'New message',
         body: preview ?? 'You have a new message.',
         onPress: connectionId ? () => router.push(`/chat/${connectionId}`) : undefined,
       };
