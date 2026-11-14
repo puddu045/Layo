@@ -57,12 +57,17 @@ export class NotificationsService {
         });
 
     this.gateway.emitToUser(userId, socketEvents.NOTIFICATION_NEW, this.toNotification(row));
-    await this.sendExpoPush(
-      userId,
-      count > 1 ? `${count} new messages` : 'New message',
-      preview,
-      { connectionId, type: 'MESSAGE_NEW' },
-    );
+
+    // OS push only on the *first* unread message in a conversation, not every one after it —
+    // Expo's push API has no Android notification-tag/replace mechanism (nothing tells the tray
+    // two pushes are "the same conversation, just updated"), so every push shows as its own
+    // separate entry there regardless of this row being bumped in place above. Sending one only
+    // when `!existing` means a burst of messages produces one push, the same way the in-app bell
+    // already shows one bumped row instead of several — opening the app surfaces whatever piled
+    // up since, same as any other messaging app's "no answer for every new text" behaviour.
+    if (!existing) {
+      await this.sendExpoPush(userId, 'New message', preview, { connectionId, type: 'MESSAGE_NEW' });
+    }
   }
 
   async list(userId: string, query: ListNotificationsQuery): Promise<NotificationPage> {
