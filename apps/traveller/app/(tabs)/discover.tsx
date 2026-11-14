@@ -7,6 +7,7 @@ import { ScreenContainer } from '../../src/components/ScreenContainer';
 import { MatchCard } from '../../src/components/MatchCard';
 import { Chip } from '../../src/components/Chip';
 import { TopBarIcons } from '../../src/components/TopBarIcons';
+import { ProfilePreviewModal } from '../../src/components/ProfilePreviewModal';
 import { EmptyState, ErrorState, LoadingState } from '../../src/components/StateViews';
 import { useDiscover, useJourneys } from '../../src/hooks/api-hooks';
 import { useCreateConnection } from '../../src/hooks/chat-hooks';
@@ -22,6 +23,7 @@ const FILTERS: Array<{ label: string; value: MatchCategory | undefined; icon: ke
 
 export default function Discover() {
   const [category, setCategory] = useState<MatchCategory | undefined>(undefined);
+  const [previewUserId, setPreviewUserId] = useState<string | undefined>();
   const journeys = useJourneys();
   const discover = useDiscover({ category, page: 1, pageSize: 20 });
   const createConnection = useCreateConnection();
@@ -91,7 +93,11 @@ export default function Discover() {
           data={discover.data.items}
           keyExtractor={(item, index) => `${item.category}-${item.profile.userId}-${index}`}
           renderItem={({ item }) => (
-            <MatchCard match={item} onConnect={() => onConnect(item.profile.userId)} />
+            <MatchCard
+              match={item}
+              onConnect={() => onConnect(item.profile.userId)}
+              onPressProfile={() => setPreviewUserId(item.profile.userId)}
+            />
           )}
           contentContainerStyle={{ paddingBottom: spacing.xl }}
           // No pull-to-refresh: react-native-web has no real gesture for it, and on Android a
@@ -104,6 +110,8 @@ export default function Discover() {
           description="We couldn't find anyone matching your upcoming journeys right now. Check back closer to your travel date."
         />
       )}
+
+      <ProfilePreviewModal userId={previewUserId} onClose={() => setPreviewUserId(undefined)} />
     </ScreenContainer>
   );
 }

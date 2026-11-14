@@ -1,4 +1,4 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Controller, Get, Param, Query } from '@nestjs/common';
 import { discoverQuerySchema, type DiscoverQuery } from '@layo/contracts';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -15,5 +15,11 @@ export class MatchingController {
     @Query(new ZodValidationPipe(discoverQuerySchema)) query: DiscoverQuery,
   ) {
     return this.matchingService.discover(user.id, query);
+  }
+
+  /** Powers the "how are we connected" section of the profile preview popup. */
+  @Get('with/:userId')
+  withUser(@CurrentUser() user: RequestUser, @Param('userId') otherUserId: string) {
+    return this.matchingService.getMatchContext(user.id, otherUserId);
   }
 }

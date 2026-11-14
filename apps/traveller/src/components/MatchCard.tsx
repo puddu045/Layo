@@ -1,8 +1,9 @@
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { Match } from '@layo/contracts';
-import { colors, radius, spacing, typography } from '../theme/tokens';
+import { colors, spacing, typography } from '../theme/tokens';
 import { notifyInfo } from '../lib/notify';
+import { Avatar } from './Avatar';
 import { Card } from './Card';
 import { Chip } from './Chip';
 import { Button } from './Button';
@@ -28,20 +29,28 @@ function formatWindow(startIso: string, endIso: string): string {
   return `${fmt(start)} – ${fmt(end)}`;
 }
 
-export function MatchCard({ match, onConnect }: { match: Match; onConnect: () => void }) {
-  const initial = match.profile.displayName.charAt(0).toUpperCase();
+export function MatchCard({
+  match,
+  onConnect,
+  onPressProfile,
+}: {
+  match: Match;
+  onConnect: () => void;
+  /** Opens the profile preview popup (photo, name, a few details) for this traveller. */
+  onPressProfile?: () => void;
+}) {
   const connectIcon = match.connectionStatus === 'NONE' ? 'person-add-outline' : undefined;
 
   return (
     <Card style={styles.card}>
-      <View style={styles.header}>
-        {match.profile.photoUrl ? (
-          <Image source={{ uri: match.profile.photoUrl }} style={styles.avatarImage} />
-        ) : (
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{initial}</Text>
-          </View>
-        )}
+      <Pressable style={styles.header} onPress={onPressProfile} disabled={!onPressProfile}>
+        <Avatar
+          photoUrl={match.profile.photoUrl}
+          displayName={match.profile.displayName}
+          size={48}
+          fallback="initial"
+          style={styles.avatarSpacing}
+        />
         <View style={{ flex: 1 }}>
           <Text style={styles.name}>
             {match.profile.displayName}
@@ -52,7 +61,7 @@ export function MatchCard({ match, onConnect }: { match: Match; onConnect: () =>
             <Text style={styles.meta}>{CATEGORY_LABEL[match.category]}</Text>
           </View>
         </View>
-      </View>
+      </Pressable>
 
       {match.profile.bio ? <Text style={styles.bio}>{match.profile.bio}</Text> : null}
 
@@ -103,17 +112,7 @@ export function MatchCard({ match, onConnect }: { match: Match; onConnect: () =>
 const styles = StyleSheet.create({
   card: { marginBottom: spacing.md },
   header: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.sm },
-  avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: radius.pill,
-    backgroundColor: colors.primaryDark,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.sm,
-  },
-  avatarImage: { width: 48, height: 48, borderRadius: radius.pill, marginRight: spacing.sm },
-  avatarText: { color: colors.white, ...typography.subtitle },
+  avatarSpacing: { marginRight: spacing.sm },
   name: { ...typography.subtitle, color: colors.textPrimary },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 1 },
   meta: { ...typography.caption, color: colors.primary, fontWeight: '600' },

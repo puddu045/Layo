@@ -10,6 +10,7 @@ import type {
   OwnProfile,
   PaginatedResponse,
   Match,
+  PublicProfile,
   UpdatePhoneRequest,
   UpdateProfileRequest,
 } from '@layo/contracts';
@@ -105,6 +106,28 @@ export function useAirports(search: string) {
     queryKey: ['airports', search],
     queryFn: () => api.get<Airport[]>(`/airports${search ? `?search=${encodeURIComponent(search)}` : ''}`),
     enabled: search.length >= 2,
+  });
+}
+
+/** Powers the profile preview popup (tapping a name/photo anywhere) — the public view of
+ * someone else's profile, same shape Discover already shows. */
+export function usePublicProfile(userId: string | undefined) {
+  return useQuery({
+    queryKey: ['profile', 'public', userId],
+    queryFn: () => api.get<PublicProfile>(`/users/${userId}/profile`),
+    enabled: !!userId,
+  });
+}
+
+/** The same popup's "how you're connected" section — current flight/airport overlap with this
+ * specific person, computed fresh rather than stored (a Connection row never records why it was
+ * made). Empty array is a valid, common result: whatever trip first connected them may already
+ * be over. */
+export function useMatchContext(userId: string | undefined) {
+  return useQuery({
+    queryKey: ['discover', 'with', userId],
+    queryFn: () => api.get<Match[]>(`/discover/with/${userId}`),
+    enabled: !!userId,
   });
 }
 

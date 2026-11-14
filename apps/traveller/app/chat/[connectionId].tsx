@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import type { Message, ReportReason } from '@layo/contracts';
 import { ScreenContainer } from '../../src/components/ScreenContainer';
 import { Avatar } from '../../src/components/Avatar';
+import { ProfilePreviewModal } from '../../src/components/ProfilePreviewModal';
 import { ErrorState, LoadingState } from '../../src/components/StateViews';
 import { ReportReasonSheet } from '../../src/components/ReportReasonSheet';
 import {
@@ -46,6 +47,7 @@ export default function ChatScreen() {
 
   const [draft, setDraft] = useState('');
   const [reportSheetOpen, setReportSheetOpen] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   const onBlock = () => {
     if (!connection) return;
@@ -126,7 +128,11 @@ export default function ChatScreen() {
         options={{
           title: connection?.otherProfile.displayName ?? 'Chat',
           headerTitle: () => (
-            <View style={styles.headerTitle}>
+            <Pressable
+              style={styles.headerTitle}
+              onPress={() => setPreviewOpen(true)}
+              disabled={!connection}
+            >
               <Avatar
                 photoUrl={connection?.otherProfile.photoUrl}
                 displayName={connection?.otherProfile.displayName ?? '?'}
@@ -136,7 +142,7 @@ export default function ChatScreen() {
               <Text style={styles.headerTitleText} numberOfLines={1}>
                 {connection?.otherProfile.displayName ?? 'Chat'}
               </Text>
-            </View>
+            </Pressable>
           ),
           headerRight: () => (
             <Pressable
@@ -238,6 +244,11 @@ export default function ChatScreen() {
         targetName={connection?.otherProfile.displayName ?? 'this traveller'}
         onCancel={() => setReportSheetOpen(false)}
         onConfirm={onConfirmBlock}
+      />
+
+      <ProfilePreviewModal
+        userId={previewOpen ? connection?.otherProfile.userId : undefined}
+        onClose={() => setPreviewOpen(false)}
       />
     </ScreenContainer>
   );

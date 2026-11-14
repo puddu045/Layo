@@ -2,15 +2,17 @@ import { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { updatePhoneRequestSchema, updateProfileRequestSchema } from '@layo/contracts';
 import { ScreenContainer } from '../src/components/ScreenContainer';
 import { Avatar } from '../src/components/Avatar';
+import { AvatarCropModal } from '../src/components/AvatarCropModal';
 import { TextField } from '../src/components/TextField';
 import { Button } from '../src/components/Button';
 import { ErrorState, LoadingState } from '../src/components/StateViews';
 import { useAuth } from '../src/lib/auth-context';
 import { useDeleteAccount, useOwnProfile, useUpdatePhone, useUpdateProfile } from '../src/hooks/api-hooks';
-import { useChangeAvatar } from '../src/hooks/avatar-hooks';
+import { useUploadAvatar } from '../src/hooks/avatar-hooks';
 import { notifyConfirm, notifyInfo } from '../src/lib/notify';
 import { ApiError } from '../src/lib/api-client';
 import { colors, radius, spacing, typography } from '../src/theme/tokens';
@@ -21,8 +23,9 @@ export default function Settings() {
   const updateProfile = useUpdateProfile();
   const updatePhone = useUpdatePhone();
   const deleteAccount = useDeleteAccount();
-  const changeAvatar = useChangeAvatar();
+  const uploadAvatar = useUploadAvatar();
   const [deleting, setDeleting] = useState(false);
+  const [pickedPhotoUri, setPickedPhotoUri] = useState<string | undefined>();
 
   const [displayName, setDisplayName] = useState('');
   const [bio, setBio] = useState('');
@@ -101,8 +104,22 @@ export default function Settings() {
     }
   };
 
-  const onChangeAvatar = () => {
-    changeAvatar.mutate(undefined, {
+  const onPickPhoto = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      notifyInfo('Permission needed', 'Photo library access is needed to choose a profile picture.');
+      return;
+    }
+    // No allowsEditing/aspect here — AvatarCropModal is this app's own crop step, shown next;
+    // the OS cropper and ours stacked back-to-back would just be a confusing double crop.
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: 'images', quality: 0.9 });
+    if (result.canceled || !result.assets[0]) return;
+    setPickedPhotoUri(result.assets[0].uri);
+  };
+
+  const onCropConfirmed = (croppedUri: string) => {
+    setPickedPhotoUri(undefined);
+    uploadAvatar.mutate(croppedUri, {
       onError: (err) =>
         notifyInfo('Could not update photo', err instanceof Error ? err.message : 'Please try again.'),
     });
@@ -134,13 +151,13 @@ export default function Settings() {
       <KeyboardAvoidingView style={styles.keyboardAvoider} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <ScrollView contentContainerStyle={styles.scroll}>
           <View style={styles.avatarSection}>
-            <Pressable onPress={onChangeAvatar} disabled={changeAvatar.isPending} style={styles.avatarPressable}>
+            <Pressable onPress={onPickPhoto} disabled={uploadAvatar.isPending} style={styles.avatarPressable}>
               <Avatar photoUrl={profile.data?.photoUrl} displayName={profile.data?.displayName ?? ''} size={96} />
               <View style={styles.avatarEditBadge}>
                 <Ionicons name="camera" size={16} color={colors.white} />
               </View>
             </Pressable>
-            <Text style={styles.avatarHint}>{changeAvatar.isPending ? 'Uploading…' : 'Tap to change photo'}</Text>
+            <Text style={styles.avatarHint}>{uploadAvatar.isPending ? 'Uploading…' : 'Tap to change photo'}</Text>
           </View>
 
           <Text style={styles.sectionTitle}>Account</Text>
@@ -211,6 +228,12 @@ export default function Settings() {
         />
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <AvatarCropModal
+        uri={pickedPhotoUri}
+        onCancel={() => setPickedPhotoUri(undefined)}
+        onConfirm={onCropConfirmed}
+      />
     </ScreenContainer>
   );
 }

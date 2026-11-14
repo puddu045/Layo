@@ -115,6 +115,63 @@ export class MatchingService {
     return paginate(matches, query);
   }
 
+  /** For the "how are we connected" popup on an already-connected user — unlike `discover`,
+   * which searches every candidate traveller, the other side is already known here, so this
+   * skips straight to running the same pure matching core (`computeMatches`) for just that one
+   * pair. One `CandidateTraveller` entry per journey of `otherUserId` (not their segments merged
+   * into one list) — `computeMatches` already handles a userId appearing more than once via its
+   * best-match map, and merging would let an unrelated pair of journeys get misread as one
+   * connecting itinerary (see `computePresenceWindows`, which infers a layover purely from
+   * segment ordering). Returns an empty array when there's no *current* overlap — e.g. the trip
+   * that originally connected them has already happened — which the caller shows as a generic
+   * "connected on Layo" message rather than treating as an error. */
+  async getMatchContext(viewerId: string, otherUserId: string): Promise<Match[]> {
+    const now = new Date();
+    const config = await this.getConfig();
+    if (!config.enabled) return [];
+
+    const viewerJourneys = await this.prisma.client.journey.findMany({
+      where: { userId: viewerId, isDiscoverable: true },
+      include: { segments: { include: { flight: true }, orderBy: { sequence: 'asc' } } },
+    });
+
+    const viewerWindows: PresenceWindow[] = [];
+    const viewerFlightIds = new Set<string>();
+    for (const journey of viewerJourneys) {
+      const segments = toPresenceSegments(journey.segments);
+      for (const s of segments) viewerFlightIds.add(s.flightId);
+      viewerWindows.push(...computePresenceWindows(segments, config));
+    }
+    if (viewerWindows.length === 0 && viewerFlightIds.size === 0) return [];
+
+    const otherJourneys = await this.prisma.client.journey.findMany({
+      where: { userId: otherUserId, isDiscoverable: true },
+      include: {
+        segments: { include: { flight: true }, orderBy: { sequence: 'asc' } },
+        user: { include: { profile: true } },
+      },
+    });
+    const otherProfile = otherJourneys[0]?.user.profile;
+    if (!otherProfile) return [];
+
+    const candidates: CandidateTraveller[] = otherJourneys.map((journey) => ({
+      userId: otherUserId,
+      profile: toPublicProfile(otherProfile),
+      segments: toPresenceSegments(journey.segments),
+      connectionStatus: 'ACCEPTED',
+    }));
+
+    const matches = computeMatches({
+      requesterWindows: viewerWindows,
+      requesterFlightIds: viewerFlightIds,
+      candidates,
+      config,
+      now,
+    });
+    matches.sort((a, b) => new Date(a.overlapStartUtc).getTime() - new Date(b.overlapStartUtc).getTime());
+    return matches;
+  }
+
   /** One query instead of two: both the "same flight" and "same airport" cases are OR branches
    * against the same `JourneySegment` table and the same journey-eligibility filter, so there's no
    * reason to round-trip twice and dedupe in JS — `distinct` pushes that to Postgres. `Flight` is

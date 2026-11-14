@@ -7,6 +7,7 @@ import { Avatar } from '../../src/components/Avatar';
 import { Card } from '../../src/components/Card';
 import { Button } from '../../src/components/Button';
 import { TopBarIcons } from '../../src/components/TopBarIcons';
+import { ProfilePreviewModal } from '../../src/components/ProfilePreviewModal';
 import { EmptyState, ErrorState, LoadingState } from '../../src/components/StateViews';
 import {
   useAcceptConnection,
@@ -30,6 +31,7 @@ function formatTime(iso: string): string {
 export default function Chats() {
   useRealtimeMessages();
   const [tab, setTab] = useState<Tab>('messages');
+  const [previewUserId, setPreviewUserId] = useState<string | undefined>();
 
   const connections = useConnections();
   const acceptConnection = useAcceptConnection();
@@ -106,7 +108,9 @@ export default function Chats() {
       <ScrollView contentContainerStyle={styles.scroll}>
         {tab === 'messages' &&
           (accepted.length > 0 ? (
-            accepted.map((c) => <ConnectionRow key={c.id} connection={c} />)
+            accepted.map((c) => (
+              <ConnectionRow key={c.id} connection={c} onPressProfile={() => setPreviewUserId(c.otherProfile.userId)} />
+            ))
           ) : (
             <Text style={styles.emptyTabText}>No conversations yet — accept a request to start chatting.</Text>
           ))}
@@ -158,6 +162,8 @@ export default function Chats() {
           </>
         )}
       </ScrollView>
+
+      <ProfilePreviewModal userId={previewUserId} onClose={() => setPreviewUserId(undefined)} />
     </ScreenContainer>
   );
 }
@@ -185,19 +191,32 @@ function TabButton({
   );
 }
 
-function ConnectionRow({ connection }: { connection: Connection }) {
+function ConnectionRow({
+  connection,
+  onPressProfile,
+}: {
+  connection: Connection;
+  onPressProfile: () => void;
+}) {
   return (
     <Pressable onPress={() => router.push(`/chat/${connection.id}`)}>
       <Card style={styles.rowCard}>
-        <Avatar
-          photoUrl={connection.otherProfile.photoUrl}
-          displayName={connection.otherProfile.displayName}
-          size={44}
-          fallback="initial"
-        />
+        {/* A nested Pressable: tapping the avatar/name opens the profile popup instead of the
+            chat — React Native awards a touch to whichever Pressable is innermost, so this
+            doesn't also trigger the row's own onPress above. */}
+        <Pressable onPress={onPressProfile} hitSlop={4}>
+          <Avatar
+            photoUrl={connection.otherProfile.photoUrl}
+            displayName={connection.otherProfile.displayName}
+            size={44}
+            fallback="initial"
+          />
+        </Pressable>
         <View style={{ flex: 1 }}>
           <View style={styles.rowTop}>
-            <Text style={styles.name}>{connection.otherProfile.displayName}</Text>
+            <Pressable onPress={onPressProfile} hitSlop={4}>
+              <Text style={styles.name}>{connection.otherProfile.displayName}</Text>
+            </Pressable>
             {connection.lastMessage && (
               <Text style={styles.time}>{formatTime(connection.lastMessage.createdAt)}</Text>
             )}
