@@ -29,7 +29,7 @@ export class ConnectionsController {
     @CurrentUser() user: RequestUser,
     @Body(new ZodValidationPipe(createConnectionRequestSchema)) dto: CreateConnectionRequest,
   ) {
-    return this.connectionsService.sendRequest(user.id, dto.addresseeUserId);
+    return this.connectionsService.sendRequest(user.id, dto.addresseeUserId, dto);
   }
 
   @Post(':connectionId/accept')

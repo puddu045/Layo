@@ -7,7 +7,7 @@ import { Avatar } from '../../src/components/Avatar';
 import { Card } from '../../src/components/Card';
 import { Button } from '../../src/components/Button';
 import { TopBarIcons } from '../../src/components/TopBarIcons';
-import { ProfilePreviewModal } from '../../src/components/ProfilePreviewModal';
+import { ProfilePreviewModal, connectionToMatchInfo } from '../../src/components/ProfilePreviewModal';
 import { EmptyState, ErrorState, LoadingState } from '../../src/components/StateViews';
 import {
   useAcceptConnection,
@@ -31,7 +31,7 @@ function formatTime(iso: string): string {
 export default function Chats() {
   useRealtimeMessages();
   const [tab, setTab] = useState<Tab>('messages');
-  const [previewUserId, setPreviewUserId] = useState<string | undefined>();
+  const [previewConnection, setPreviewConnection] = useState<Connection | undefined>();
 
   const connections = useConnections();
   const acceptConnection = useAcceptConnection();
@@ -109,7 +109,7 @@ export default function Chats() {
         {tab === 'messages' &&
           (accepted.length > 0 ? (
             accepted.map((c) => (
-              <ConnectionRow key={c.id} connection={c} onPressProfile={() => setPreviewUserId(c.otherProfile.userId)} />
+              <ConnectionRow key={c.id} connection={c} onPressProfile={() => setPreviewConnection(c)} />
             ))
           ) : (
             <Text style={styles.emptyTabText}>No conversations yet — accept a request to start chatting.</Text>
@@ -163,7 +163,11 @@ export default function Chats() {
         )}
       </ScrollView>
 
-      <ProfilePreviewModal userId={previewUserId} onClose={() => setPreviewUserId(undefined)} />
+      <ProfilePreviewModal
+        userId={previewConnection?.otherProfile.userId}
+        matchInfo={previewConnection ? connectionToMatchInfo(previewConnection) : undefined}
+        onClose={() => setPreviewConnection(undefined)}
+      />
     </ScreenContainer>
   );
 }

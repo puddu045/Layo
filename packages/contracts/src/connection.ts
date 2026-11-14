@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { publicProfileSchema } from './profile';
+import { matchCategorySchema } from './match';
 
 export const connectionStatusSchema = z.enum(['PENDING', 'ACCEPTED', 'DECLINED', 'CANCELLED']);
 export type ConnectionStatus = z.infer<typeof connectionStatusSchema>;
@@ -8,9 +9,22 @@ export type ConnectionStatus = z.infer<typeof connectionStatusSchema>;
 export const connectionDirectionSchema = z.enum(['SENT', 'RECEIVED']);
 export type ConnectionDirection = z.infer<typeof connectionDirectionSchema>;
 
+/** Why Layo matched these two — carried from the requester's Discover card through to the
+ * created connection, so "how are we connected" can keep answering it later. All optional:
+ * every field is only ever set together (see `ConnectionsService.sendRequest`), but the schema
+ * doesn't need to enforce that here. */
+export const connectionMatchContextSchema = z.object({
+  matchCategory: matchCategorySchema.optional(),
+  matchAirportIata: z.string().optional(),
+  matchFlightNumber: z.string().optional(),
+  matchOverlapStartUtc: z.string().datetime().optional(),
+  matchOverlapEndUtc: z.string().datetime().optional(),
+});
+export type ConnectionMatchContext = z.infer<typeof connectionMatchContextSchema>;
+
 export const createConnectionRequestSchema = z.object({
   addresseeUserId: z.string().uuid(),
-});
+}).merge(connectionMatchContextSchema);
 export type CreateConnectionRequest = z.infer<typeof createConnectionRequestSchema>;
 
 export const connectionLastMessageSchema = z.object({
@@ -35,7 +49,7 @@ export const connectionSchema = z.object({
   blockedByMe: z.boolean(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
-});
+}).merge(connectionMatchContextSchema);
 export type Connection = z.infer<typeof connectionSchema>;
 
 export const listConnectionsQuerySchema = z.object({

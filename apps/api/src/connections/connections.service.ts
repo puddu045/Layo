@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import type { Connection, ConnectionStatus, ListConnectionsQuery } from '@layo/contracts';
+import type { Connection, ConnectionMatchContext, ConnectionStatus, ListConnectionsQuery } from '@layo/contracts';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { toPublicProfile } from '../common/mappers/profile.mapper';
 import { BlocksService } from '../safety/blocks.service';
@@ -14,7 +14,7 @@ export class ConnectionsService {
     private readonly notificationsService: NotificationsService,
   ) {}
 
-  async sendRequest(userId: string, addresseeUserId: string): Promise<Connection> {
+  async sendRequest(userId: string, addresseeUserId: string, matchContext?: ConnectionMatchContext): Promise<Connection> {
     if (userId === addresseeUserId) {
       throw new BadRequestException('You cannot send a connection request to yourself');
     }
@@ -48,12 +48,14 @@ export class ConnectionsService {
     switch (action.type) {
       case 'CREATE': {
         const created = await this.prisma.client.connection.create({
-          data: { requesterId: userId, addresseeId: addresseeUserId, status: 'PENDING' },
+          data: { requesterId: userId, addresseeId: addresseeUserId, status: 'PENDING', ...toMatchContextData(matchContext) },
         });
         await this.notifyConnectionRequest(addresseeUserId, created.id, userId);
         return this.toConnectionDto(created, userId);
       }
       case 'AUTO_ACCEPT': {
+        // Never overwrites matchCategory/etc. here — the existing row already carries the
+        // original requester's own match context from when *they* created it.
         const updated = await this.prisma.client.connection.update({
           where: { id: action.existingId },
           data: { status: 'ACCEPTED' },
@@ -64,7 +66,12 @@ export class ConnectionsService {
       case 'REOPEN': {
         const updated = await this.prisma.client.connection.update({
           where: { id: action.existingId },
-          data: { requesterId: userId, addresseeId: addresseeUserId, status: 'PENDING' },
+          data: {
+            requesterId: userId,
+            addresseeId: addresseeUserId,
+            status: 'PENDING',
+            ...toMatchContextData(matchContext),
+          },
         });
         await this.notifyConnectionRequest(addresseeUserId, updated.id, userId);
         return this.toConnectionDto(updated, userId);
@@ -164,7 +171,19 @@ export class ConnectionsService {
   }
 
   private async toConnectionDto(
-    row: { id: string; status: string; requesterId: string; addresseeId: string; createdAt: Date; updatedAt: Date },
+    row: {
+      id: string;
+      status: string;
+      requesterId: string;
+      addresseeId: string;
+      createdAt: Date;
+      updatedAt: Date;
+      matchCategory?: string | null;
+      matchAirportIata?: string | null;
+      matchFlightNumber?: string | null;
+      matchOverlapStartUtc?: Date | null;
+      matchOverlapEndUtc?: Date | null;
+    },
     viewerId: string,
   ): Promise<Connection> {
     const otherUserId = row.requesterId === viewerId ? row.addresseeId : row.requesterId;
@@ -197,8 +216,27 @@ export class ConnectionsService {
       lastMessage: lastMessage
         ? { body: lastMessage.body, senderId: lastMessage.senderId, createdAt: lastMessage.createdAt.toISOString() }
         : undefined,
+      matchCategory: (row.matchCategory as Connection['matchCategory']) ?? undefined,
+      matchAirportIata: row.matchAirportIata ?? undefined,
+      matchFlightNumber: row.matchFlightNumber ?? undefined,
+      matchOverlapStartUtc: row.matchOverlapStartUtc?.toISOString(),
+      matchOverlapEndUtc: row.matchOverlapEndUtc?.toISOString(),
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     };
   }
+}
+
+/** `undefined` matchContext (no Discover card behind this request) must produce `{}`, not a set
+ * of explicit nulls — Prisma treats a field simply absent from `data` as "don't touch it",
+ * which matters for `AUTO_ACCEPT`-adjacent paths reusing this on an update. */
+function toMatchContextData(matchContext: ConnectionMatchContext | undefined) {
+  if (!matchContext) return {};
+  return {
+    matchCategory: matchContext.matchCategory,
+    matchAirportIata: matchContext.matchAirportIata,
+    matchFlightNumber: matchContext.matchFlightNumber,
+    matchOverlapStartUtc: matchContext.matchOverlapStartUtc ? new Date(matchContext.matchOverlapStartUtc) : undefined,
+    matchOverlapEndUtc: matchContext.matchOverlapEndUtc ? new Date(matchContext.matchOverlapEndUtc) : undefined,
+  };
 }

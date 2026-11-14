@@ -119,18 +119,6 @@ export function usePublicProfile(userId: string | undefined) {
   });
 }
 
-/** The same popup's "how you're connected" section — current flight/airport overlap with this
- * specific person, computed fresh rather than stored (a Connection row never records why it was
- * made). Empty array is a valid, common result: whatever trip first connected them may already
- * be over. */
-export function useMatchContext(userId: string | undefined) {
-  return useQuery({
-    queryKey: ['discover', 'with', userId],
-    queryFn: () => api.get<Match[]>(`/discover/with/${userId}`),
-    enabled: !!userId,
-  });
-}
-
 export function useDiscover(query: Partial<DiscoverQuery>) {
   const params = new URLSearchParams();
   if (query.journeyId) params.set('journeyId', query.journeyId);

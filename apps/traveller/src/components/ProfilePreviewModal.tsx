@@ -1,36 +1,67 @@
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import type { Match } from '@layo/contracts';
+import type { Connection, MatchCategory } from '@layo/contracts';
 import { Avatar } from './Avatar';
 import { Chip } from './Chip';
 import { Button } from './Button';
 import { LoadingState } from './StateViews';
-import { usePublicProfile, useMatchContext } from '../hooks/api-hooks';
+import { usePublicProfile } from '../hooks/api-hooks';
 import { colors, radius, spacing, typography } from '../theme/tokens';
 
-const CATEGORY_ICON: Record<Match['category'], keyof typeof Ionicons.glyphMap> = {
+const CATEGORY_ICON: Record<MatchCategory, keyof typeof Ionicons.glyphMap> = {
   SAME_FLIGHT: 'airplane-outline',
   SAME_DEPARTURE_AIRPORT: 'location-outline',
   SAME_LAYOVER_AIRPORT: 'swap-horizontal-outline',
 };
 
-function describeMatch(match: Match): string {
-  if (match.category === 'SAME_FLIGHT') return `Same flight${match.flightNumber ? ` · ${match.flightNumber}` : ''}`;
-  if (match.category === 'SAME_DEPARTURE_AIRPORT') return `Same departure airport${match.airportIata ? ` · ${match.airportIata}` : ''}`;
-  return `Same layover${match.airportIata ? ` · ${match.airportIata}` : ''}`;
+export interface ProfilePreviewMatchInfo {
+  category: MatchCategory;
+  airportIata?: string;
+  flightNumber?: string;
+  overlapStartUtc?: string;
+}
+
+/** For an already-connected pair (the chat screen, the Chats list) — reads the match context
+ * captured once when the connection was made (see ConnectionsService.sendRequest). `undefined`
+ * for a connection made before that existed, which the modal shows as a generic "connected on
+ * Layo" rather than nothing. */
+export function connectionToMatchInfo(connection: Connection): ProfilePreviewMatchInfo | undefined {
+  if (!connection.matchCategory) return undefined;
+  return {
+    category: connection.matchCategory,
+    airportIata: connection.matchAirportIata,
+    flightNumber: connection.matchFlightNumber,
+    overlapStartUtc: connection.matchOverlapStartUtc,
+  };
+}
+
+function formatMatchDate(iso: string): string {
+  return new Date(iso).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
+}
+
+function describeMatch(match: ProfilePreviewMatchInfo): string {
+  const when = match.overlapStartUtc ? ` · ${formatMatchDate(match.overlapStartUtc)}` : '';
+  if (match.category === 'SAME_FLIGHT') return `Same flight${match.flightNumber ? ` ${match.flightNumber}` : ''}${when}`;
+  if (match.category === 'SAME_DEPARTURE_AIRPORT') return `Same departure airport${match.airportIata ? ` · ${match.airportIata}` : ''}${when}`;
+  return `Same layover${match.airportIata ? ` · ${match.airportIata}` : ''}${when}`;
 }
 
 interface ProfilePreviewModalProps {
   userId: string | undefined;
   onClose: () => void;
+  /** Why Layo matched these two, when known — for an already-connected pair this comes from the
+   * Connection's own stored matchCategory/etc. (captured once, at connection time — see
+   * ConnectionsService.sendRequest), and for a not-yet-connected Discover card it's that card's
+   * own live Match. Omitted entirely (not just unset) shows the generic "connected on Layo"
+   * fallback, same as a pre-existing connection from before this was captured. */
+  matchInfo?: ProfilePreviewMatchInfo;
 }
 
 /** The popup behind tapping a name or photo anywhere in the app — their photo, name, a few
- * profile details, and (for someone already connected) how the two of you are currently
- * connected. Visible exactly when `userId` is set; the caller just needs one piece of state. */
-export function ProfilePreviewModal({ userId, onClose }: ProfilePreviewModalProps) {
+ * profile details, and how the two of you are connected. Visible exactly when `userId` is set;
+ * the caller just needs one piece of state. */
+export function ProfilePreviewModal({ userId, onClose, matchInfo }: ProfilePreviewModalProps) {
   const profile = usePublicProfile(userId);
-  const matchContext = useMatchContext(userId);
 
   return (
     <Modal visible={!!userId} transparent animationType="fade" onRequestClose={onClose}>
@@ -67,15 +98,11 @@ export function ProfilePreviewModal({ userId, onClose }: ProfilePreviewModalProp
                 )}
 
                 <Text style={styles.sectionLabel}>How you're connected</Text>
-                {matchContext.isLoading ? (
-                  <Text style={styles.connectionHint}>Checking…</Text>
-                ) : matchContext.data && matchContext.data.length > 0 ? (
-                  matchContext.data.map((match, i) => (
-                    <View key={`${match.category}-${i}`} style={styles.connectionRow}>
-                      <Ionicons name={CATEGORY_ICON[match.category]} size={15} color={colors.primary} />
-                      <Text style={styles.connectionText}>{describeMatch(match)}</Text>
-                    </View>
-                  ))
+                {matchInfo ? (
+                  <View style={styles.connectionRow}>
+                    <Ionicons name={CATEGORY_ICON[matchInfo.category]} size={15} color={colors.primary} />
+                    <Text style={styles.connectionText}>{describeMatch(matchInfo)}</Text>
+                  </View>
                 ) : (
                   <Text style={styles.connectionHint}>You're connected on Layo.</Text>
                 )}

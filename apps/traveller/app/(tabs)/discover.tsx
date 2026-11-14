@@ -2,12 +2,12 @@ import { useState } from 'react';
 import { FlatList, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import type { MatchCategory } from '@layo/contracts';
+import type { Match, MatchCategory } from '@layo/contracts';
 import { ScreenContainer } from '../../src/components/ScreenContainer';
 import { MatchCard } from '../../src/components/MatchCard';
 import { Chip } from '../../src/components/Chip';
 import { TopBarIcons } from '../../src/components/TopBarIcons';
-import { ProfilePreviewModal } from '../../src/components/ProfilePreviewModal';
+import { ProfilePreviewModal, type ProfilePreviewMatchInfo } from '../../src/components/ProfilePreviewModal';
 import { EmptyState, ErrorState, LoadingState } from '../../src/components/StateViews';
 import { useDiscover, useJourneys } from '../../src/hooks/api-hooks';
 import { useCreateConnection } from '../../src/hooks/chat-hooks';
@@ -23,28 +23,38 @@ const FILTERS: Array<{ label: string; value: MatchCategory | undefined; icon: ke
 
 export default function Discover() {
   const [category, setCategory] = useState<MatchCategory | undefined>(undefined);
-  const [previewUserId, setPreviewUserId] = useState<string | undefined>();
+  const [preview, setPreview] = useState<{ userId: string; matchInfo: ProfilePreviewMatchInfo } | undefined>();
   const journeys = useJourneys();
   const discover = useDiscover({ category, page: 1, pageSize: 20 });
   const createConnection = useCreateConnection();
 
-  const onConnect = (userId: string) => {
-    createConnection.mutate(userId, {
-      onSuccess: (connection) => {
-        notifyInfo(
-          connection.status === 'ACCEPTED' ? 'Connected!' : 'Request sent',
-          connection.status === 'ACCEPTED'
-            ? 'You are now connected — find the chat in your Chats tab.'
-            : "They'll see your request in their Chats tab.",
-        );
+  const onConnect = (match: Match) => {
+    createConnection.mutate(
+      {
+        addresseeUserId: match.profile.userId,
+        matchCategory: match.category,
+        matchAirportIata: match.airportIata,
+        matchFlightNumber: match.flightNumber,
+        matchOverlapStartUtc: match.overlapStartUtc,
+        matchOverlapEndUtc: match.overlapEndUtc,
       },
-      onError: (err) => {
-        notifyInfo(
-          'Could not send request',
-          err instanceof Error ? err.message : 'Please try again.',
-        );
+      {
+        onSuccess: (connection) => {
+          notifyInfo(
+            connection.status === 'ACCEPTED' ? 'Connected!' : 'Request sent',
+            connection.status === 'ACCEPTED'
+              ? 'You are now connected — find the chat in your Chats tab.'
+              : "They'll see your request in their Chats tab.",
+          );
+        },
+        onError: (err) => {
+          notifyInfo(
+            'Could not send request',
+            err instanceof Error ? err.message : 'Please try again.',
+          );
+        },
       },
-    });
+    );
   };
 
   return (
@@ -95,8 +105,18 @@ export default function Discover() {
           renderItem={({ item }) => (
             <MatchCard
               match={item}
-              onConnect={() => onConnect(item.profile.userId)}
-              onPressProfile={() => setPreviewUserId(item.profile.userId)}
+              onConnect={() => onConnect(item)}
+              onPressProfile={() =>
+                setPreview({
+                  userId: item.profile.userId,
+                  matchInfo: {
+                    category: item.category,
+                    airportIata: item.airportIata,
+                    flightNumber: item.flightNumber,
+                    overlapStartUtc: item.overlapStartUtc,
+                  },
+                })
+              }
             />
           )}
           contentContainerStyle={{ paddingBottom: spacing.xl }}
@@ -111,7 +131,11 @@ export default function Discover() {
         />
       )}
 
-      <ProfilePreviewModal userId={previewUserId} onClose={() => setPreviewUserId(undefined)} />
+      <ProfilePreviewModal
+        userId={preview?.userId}
+        matchInfo={preview?.matchInfo}
+        onClose={() => setPreview(undefined)}
+      />
     </ScreenContainer>
   );
 }

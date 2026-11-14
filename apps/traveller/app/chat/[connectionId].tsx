@@ -14,7 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import type { Message, ReportReason } from '@layo/contracts';
 import { ScreenContainer } from '../../src/components/ScreenContainer';
 import { Avatar } from '../../src/components/Avatar';
-import { ProfilePreviewModal } from '../../src/components/ProfilePreviewModal';
+import { ProfilePreviewModal, connectionToMatchInfo } from '../../src/components/ProfilePreviewModal';
 import { ErrorState, LoadingState } from '../../src/components/StateViews';
 import { ReportReasonSheet } from '../../src/components/ReportReasonSheet';
 import {
@@ -248,6 +248,7 @@ export default function ChatScreen() {
 
       <ProfilePreviewModal
         userId={previewOpen ? connection?.otherProfile.userId : undefined}
+        matchInfo={connection ? connectionToMatchInfo(connection) : undefined}
         onClose={() => setPreviewOpen(false)}
       />
     </ScreenContainer>

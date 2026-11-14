@@ -1,6 +1,13 @@
 import { useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { socketEvents, type Connection, type ConnectionStatus, type Message, type PaginatedResponse } from '@layo/contracts';
+import {
+  socketEvents,
+  type Connection,
+  type ConnectionStatus,
+  type CreateConnectionRequest,
+  type Message,
+  type PaginatedResponse,
+} from '@layo/contracts';
 import { api } from '../lib/api-client';
 import { getSocket } from '../lib/socket';
 import { useAuth } from '../lib/auth-context';
@@ -15,7 +22,7 @@ export function useConnections(status?: ConnectionStatus) {
 export function useCreateConnection() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (addresseeUserId: string) => api.post<Connection>('/connections', { addresseeUserId }),
+    mutationFn: (dto: CreateConnectionRequest) => api.post<Connection>('/connections', dto),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['connections'] });
       queryClient.invalidateQueries({ queryKey: ['discover'] });

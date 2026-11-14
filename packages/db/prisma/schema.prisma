@@ -239,6 +239,18 @@ model Connection {
   addresseeId  String
   addressee    User             @relation("ConnectionAddressee", fields: [addresseeId], references: [id], onDelete: Cascade)
   status       ConnectionStatus @default(PENDING)
+  /// Captured once, at creation (or REOPEN), from the requester's Discover match — why Layo
+  /// matched these two people, kept around so it still answers "how are we connected" after
+  /// the trip that caused it has passed, or if either side's journey is later edited or
+  /// deleted. Never recomputed/overwritten after that; null on a connection made before this
+  /// existed, or on a REOPENed connection that's seen the status flip since. Plain string, not
+  /// the MatchCategory enum, matching every other "event kind" column in this schema
+  /// (Notification.type, AuditLog.action) — new categories never need a migration.
+  matchCategory        String?
+  matchAirportIata     String?
+  matchFlightNumber    String?
+  matchOverlapStartUtc DateTime?
+  matchOverlapEndUtc   DateTime?
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt
 
