@@ -1,18 +1,15 @@
 import { useMutation } from '@tanstack/react-query';
 import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system';
-import { decode } from 'base64-arraybuffer';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../lib/auth-context';
 import { useUpdateProfile } from './api-hooks';
 
 const AVATARS_BUCKET = 'avatars';
-
-function contentTypeFor(extension: string): string {
-  if (extension === 'png') return 'image/png';
-  if (extension === 'webp') return 'image/webp';
-  return 'image/jpeg';
-}
+const EXTENSION_BY_MIME_TYPE: Record<string, string> = {
+  'image/png': 'png',
+  'image/webp': 'webp',
+  'image/jpeg': 'jpg',
+};
 
 /**
  * Picks an image from the library, uploads it to the `avatars` Supabase Storage bucket under
@@ -20,9 +17,10 @@ function contentTypeFor(extension: string): string {
  * `<userId>/...` paths), and saves the resulting public URL onto the profile via the existing
  * `updateProfile` endpoint.
  *
- * Reads the file as base64 via `expo-file-system` and decodes it to an ArrayBuffer rather than
- * `fetch(uri).blob()` — the latter has been unreliable for local `file://` URIs on Android on
- * some RN/Hermes combinations; this is Supabase's own documented approach for Expo apps.
+ * Reads the picked asset via `fetch(uri).arrayBuffer()` — this works identically whether `uri` is
+ * a native `file://` path or a web `blob:` URL (the image picker returns the latter when this
+ * app runs as a website), unlike `expo-file-system`'s `readAsStringAsync`, which is deprecated
+ * in this SDK version and isn't meaningfully implemented for web at all.
  */
 export function useChangeAvatar() {
   const { session } = useAuth();
@@ -48,13 +46,14 @@ export function useChangeAvatar() {
       const userId = session?.user.id;
       if (!userId) throw new Error('Not signed in');
 
-      const extension = asset.uri.split('.').pop()?.toLowerCase() ?? 'jpg';
+      const contentType = asset.mimeType ?? 'image/jpeg';
+      const extension = EXTENSION_BY_MIME_TYPE[contentType] ?? 'jpg';
       const path = `${userId}/avatar.${extension}`;
 
-      const base64 = await FileSystem.readAsStringAsync(asset.uri, { encoding: FileSystem.EncodingType.Base64 });
+      const arrayBuffer = await fetch(asset.uri).then((res) => res.arrayBuffer());
       const { error: uploadError } = await supabase.storage
         .from(AVATARS_BUCKET)
-        .upload(path, decode(base64), { contentType: contentTypeFor(extension), upsert: true });
+        .upload(path, arrayBuffer, { contentType, upsert: true });
       if (uploadError) throw uploadError;
 
       const { data } = supabase.storage.from(AVATARS_BUCKET).getPublicUrl(path);
