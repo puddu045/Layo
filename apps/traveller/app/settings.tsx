@@ -7,6 +7,7 @@ import { updatePhoneRequestSchema, updateProfileRequestSchema } from '@layo/cont
 import { ScreenContainer } from '../src/components/ScreenContainer';
 import { Avatar } from '../src/components/Avatar';
 import { AvatarCropModal } from '../src/components/AvatarCropModal';
+import { ImageViewerModal } from '../src/components/ImageViewerModal';
 import { TextField } from '../src/components/TextField';
 import { Button } from '../src/components/Button';
 import { ErrorState, LoadingState } from '../src/components/StateViews';
@@ -26,6 +27,7 @@ export default function Settings() {
   const uploadAvatar = useUploadAvatar();
   const [deleting, setDeleting] = useState(false);
   const [pickedPhotoUri, setPickedPhotoUri] = useState<string | undefined>();
+  const [viewerOpen, setViewerOpen] = useState(false);
 
   const [displayName, setDisplayName] = useState('');
   const [bio, setBio] = useState('');
@@ -151,13 +153,19 @@ export default function Settings() {
       <KeyboardAvoidingView style={styles.keyboardAvoider} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <ScrollView contentContainerStyle={styles.scroll}>
           <View style={styles.avatarSection}>
-            <Pressable onPress={onPickPhoto} disabled={uploadAvatar.isPending} style={styles.avatarPressable}>
+            <Pressable
+              onPress={() => (profile.data?.photoUrl ? setViewerOpen(true) : onPickPhoto())}
+              disabled={uploadAvatar.isPending}
+              style={styles.avatarPressable}
+            >
               <Avatar photoUrl={profile.data?.photoUrl} displayName={profile.data?.displayName ?? ''} size={96} />
               <View style={styles.avatarEditBadge}>
                 <Ionicons name="camera" size={16} color={colors.white} />
               </View>
             </Pressable>
-            <Text style={styles.avatarHint}>{uploadAvatar.isPending ? 'Uploading…' : 'Tap to change photo'}</Text>
+            <Text style={styles.avatarHint}>
+              {uploadAvatar.isPending ? 'Uploading…' : profile.data?.photoUrl ? 'Tap to view photo' : 'Tap to add a photo'}
+            </Text>
           </View>
 
           <Text style={styles.sectionTitle}>Account</Text>
@@ -233,6 +241,12 @@ export default function Settings() {
         uri={pickedPhotoUri}
         onCancel={() => setPickedPhotoUri(undefined)}
         onConfirm={onCropConfirmed}
+      />
+
+      <ImageViewerModal
+        photoUrl={viewerOpen ? profile.data?.photoUrl : undefined}
+        onClose={() => setViewerOpen(false)}
+        onChangePhoto={onPickPhoto}
       />
     </ScreenContainer>
   );

@@ -1,9 +1,11 @@
+import { useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { Connection, MatchCategory } from '@layo/contracts';
 import { Avatar } from './Avatar';
 import { Chip } from './Chip';
 import { Button } from './Button';
+import { ImageViewerModal } from './ImageViewerModal';
 import { LoadingState } from './StateViews';
 import { usePublicProfile } from '../hooks/api-hooks';
 import { colors, radius, spacing, typography } from '../theme/tokens';
@@ -62,6 +64,7 @@ interface ProfilePreviewModalProps {
  * the caller just needs one piece of state. */
 export function ProfilePreviewModal({ userId, onClose, matchInfo }: ProfilePreviewModalProps) {
   const profile = usePublicProfile(userId);
+  const [viewerOpen, setViewerOpen] = useState(false);
 
   return (
     <Modal visible={!!userId} transparent animationType="fade" onRequestClose={onClose}>
@@ -75,7 +78,12 @@ export function ProfilePreviewModal({ userId, onClose, matchInfo }: ProfilePrevi
               <Text style={styles.error}>Could not load this profile.</Text>
             ) : (
               <>
-                <Avatar photoUrl={profile.data.photoUrl} displayName={profile.data.displayName} size={120} />
+                <Pressable
+                  onPress={() => profile.data?.photoUrl && setViewerOpen(true)}
+                  disabled={!profile.data.photoUrl}
+                >
+                  <Avatar photoUrl={profile.data.photoUrl} displayName={profile.data.displayName} size={120} />
+                </Pressable>
                 <Text style={styles.name}>
                   {profile.data.displayName}
                   {profile.data.age ? `, ${profile.data.age}` : ''}
@@ -113,6 +121,11 @@ export function ProfilePreviewModal({ userId, onClose, matchInfo }: ProfilePrevi
           </ScrollView>
         </Pressable>
       </Pressable>
+
+      <ImageViewerModal
+        photoUrl={viewerOpen ? profile.data?.photoUrl : undefined}
+        onClose={() => setViewerOpen(false)}
+      />
     </Modal>
   );
 }
