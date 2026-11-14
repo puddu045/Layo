@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import type { Connection } from '@layo/contracts';
 import { ScreenContainer } from '../../src/components/ScreenContainer';
+import { Avatar } from '../../src/components/Avatar';
 import { Card } from '../../src/components/Card';
 import { Button } from '../../src/components/Button';
 import { TopBarIcons } from '../../src/components/TopBarIcons';
@@ -188,11 +189,12 @@ function ConnectionRow({ connection }: { connection: Connection }) {
   return (
     <Pressable onPress={() => router.push(`/chat/${connection.id}`)}>
       <Card style={styles.rowCard}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>
-            {connection.otherProfile.displayName.charAt(0).toUpperCase()}
-          </Text>
-        </View>
+        <Avatar
+          photoUrl={connection.otherProfile.photoUrl}
+          displayName={connection.otherProfile.displayName}
+          size={44}
+          fallback="initial"
+        />
         <View style={{ flex: 1 }}>
           <View style={styles.rowTop}>
             <Text style={styles.name}>{connection.otherProfile.displayName}</Text>
@@ -266,15 +268,6 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
     gap: spacing.sm,
   },
-  avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.pill,
-    backgroundColor: colors.primaryDark,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarText: { color: colors.white, ...typography.subtitle },
   rowTop: { flexDirection: 'row', justifyContent: 'space-between' },
   name: { ...typography.subtitle, color: colors.textPrimary },
   bio: { ...typography.caption, color: colors.textSecondary, marginTop: 2 },
