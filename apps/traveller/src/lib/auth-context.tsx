@@ -1,7 +1,15 @@
 import { createContext, useContext, useEffect, useMemo, useState, type PropsWithChildren } from 'react';
+import { Platform } from 'react-native';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from './supabase';
 import { api } from './api-client';
+
+// Only set on native (not web, where this same codebase also runs) — a signup made in the app
+// should hand the confirmation email a deep link back into the app, not Supabase's default Site
+// URL (a web page). Must also be added to this project's Supabase Dashboard → Authentication →
+// URL Configuration → Redirect URLs allow list, or Supabase silently ignores it and falls back
+// to the Site URL. `app/auth/confirm.tsx` is what actually receives this link.
+const EMAIL_CONFIRM_REDIRECT = Platform.OS === 'web' ? undefined : 'layo://auth/confirm';
 
 interface AuthMeResponse {
   id: string;
@@ -77,7 +85,11 @@ export function AuthProvider({ children }: PropsWithChildren) {
       profileError,
       refreshProfileStatus,
       signUp: async (email, password) => {
-        const { error } = await supabase.auth.signUp({ email, password });
+        const { error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: EMAIL_CONFIRM_REDIRECT ? { emailRedirectTo: EMAIL_CONFIRM_REDIRECT } : undefined,
+        });
         if (error) throw error;
       },
       signIn: async (email, password) => {
@@ -88,7 +100,11 @@ export function AuthProvider({ children }: PropsWithChildren) {
         await supabase.auth.signOut();
       },
       resendConfirmation: async (email) => {
-        const { error } = await supabase.auth.resend({ type: 'signup', email });
+        const { error } = await supabase.auth.resend({
+          type: 'signup',
+          email,
+          options: EMAIL_CONFIRM_REDIRECT ? { emailRedirectTo: EMAIL_CONFIRM_REDIRECT } : undefined,
+        });
         if (error) throw error;
       },
     }),
