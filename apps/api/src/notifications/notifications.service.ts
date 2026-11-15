@@ -7,8 +7,17 @@ import { RealtimeGateway } from '../realtime/realtime.gateway';
 const EXPO_PUSH_API_URL = 'https://exp.host/--/api/v2/push/send';
 // Caps how many individual message previews a bumped notification keeps — unbounded growth here
 // would bloat the FCM data payload (there's a hard ~4KB limit on it) for a conversation nobody's
-// opened in a while. The oldest previews fall off first; `count` still tracks the true total.
+// opened in a while. The oldest previews fall off first; `countByConnection` still tracks the
+// true total per conversation.
 const MAX_PREVIEWS = 5;
+
+/** The single, per-user `MESSAGE_NEW` notification's payload shape — see
+ * `createOrBumpMessageNotification`'s own comment for why this is keyed by connection
+ * internally despite there only ever being one row. */
+interface MessageNewPayload {
+  countByConnection: Record<string, number>;
+  previewsByConnection: Record<string, { fromUserDisplayName: string; previews: string[] }>;
+}
 
 @Injectable()
 export class NotificationsService {
@@ -39,17 +48,17 @@ export class NotificationsService {
     await Promise.all(admins.map((admin) => this.create(admin.id, type, payload)));
   }
 
-  /** Used by `MessagingService` for every new message — rather than `create()`, which would
-   * leave one separate unread row per message (10 messages in a row from the same person showed
-   * up as 10 separate notifications). If an unread `MESSAGE_NEW` for this exact connection
-   * already exists, this bumps it in place — appends to the kept previews (capped at
-   * `MAX_PREVIEWS`, oldest dropped first), increments `count`, resets `createdAt` so it
-   * resurfaces at the top — instead of inserting another row. `count` is the true total even
-   * once `previews` has capped out, so "12 new messages" stays accurate even though only the
-   * last 5 bodies are kept.
+  /** Used by `MessagingService` for every new message. Unlike the OS push below (still one
+   * per-conversation system-tray entry, so it can keep deep-linking to the right chat on tap),
+   * the in-app bell deliberately collapses every unread message, from any conversation or
+   * sender, into ONE notification row per user — the Chats list itself is where per-conversation
+   * detail belongs (it already shows its own per-chat unread state from `Message.readAt`), so the
+   * bell only needs to say "you have unread messages" and send you there.
    *
-   * Pushes on *every* message, not just the first unread one — see `sendExpoPush`'s own comment
-   * for why that's now safe to do without flooding the Android tray. */
+   * The row's payload still tracks state *per connection* internally (`countByConnection`,
+   * `previewsByConnection`) purely so `markReadForConnection` can remove just that conversation's
+   * share when it's read, without guessing at the others — the row only actually clears once
+   * every connection's contribution is gone. */
   async createOrBumpMessageNotification(
     userId: string,
     connectionId: string,
@@ -58,30 +67,42 @@ export class NotificationsService {
     preview: string,
   ): Promise<void> {
     const existing = await this.prisma.client.notification.findFirst({
-      where: { userId, type: 'MESSAGE_NEW', readAt: null, payload: { path: ['connectionId'], equals: connectionId } },
+      where: { userId, type: 'MESSAGE_NEW', readAt: null },
     });
 
-    const existingPayload = existing?.payload as Record<string, unknown> | undefined;
-    const count = (Number(existingPayload?.count) || 1) + (existing ? 1 : 0);
-    const previews = [
-      ...(Array.isArray(existingPayload?.previews) ? (existingPayload.previews as string[]) : []),
-      preview,
-    ].slice(-MAX_PREVIEWS);
+    const existingPayload = existing?.payload as MessageNewPayload | undefined;
+    const countByConnection = { ...existingPayload?.countByConnection };
+    const previewsByConnection = { ...existingPayload?.previewsByConnection };
 
-    const payload = { connectionId, fromUserId, fromUserDisplayName, preview, previews, count };
+    countByConnection[connectionId] = (countByConnection[connectionId] ?? 0) + 1;
+    previewsByConnection[connectionId] = {
+      fromUserDisplayName,
+      previews: [...(previewsByConnection[connectionId]?.previews ?? []), preview].slice(-MAX_PREVIEWS),
+    };
+
+    const payload: MessageNewPayload = { countByConnection, previewsByConnection };
     const row = existing
-      ? await this.prisma.client.notification.update({ where: { id: existing.id }, data: { createdAt: new Date(), payload } })
-      : await this.prisma.client.notification.create({ data: { userId, type: 'MESSAGE_NEW', payload } });
+      ? await this.prisma.client.notification.update({
+          where: { id: existing.id },
+          data: { createdAt: new Date(), payload: payload as unknown as Prisma.InputJsonValue },
+        })
+      : await this.prisma.client.notification.create({
+          data: { userId, type: 'MESSAGE_NEW', payload: payload as unknown as Prisma.InputJsonValue },
+        });
 
     this.gateway.emitToUser(userId, socketEvents.NOTIFICATION_NEW, this.toNotification(row));
 
+    // OS push: still scoped to this one conversation, so the system tray keeps stacking/replacing
+    // per conversation and tapping it deep-links to the right chat — independent of the bell's
+    // aggregate row above.
+    const count = countByConnection[connectionId]!;
     const title = count > 1 ? `${fromUserDisplayName} (${count} new messages)` : fromUserDisplayName;
     await this.sendExpoPush(userId, {
       // Expo's Android implementation reads these three keys directly out of a data-only
       // message's `data` map to build a real system notification (see `sendExpoPush`'s comment
       // for the exact source) — title/message/tag, not the push API's own top-level fields.
       title,
-      message: previews.join('\n'),
+      message: previewsByConnection[connectionId]!.previews.join('\n'),
       tag: `message-${connectionId}`,
       channelId: 'default',
       connectionId,
@@ -110,21 +131,34 @@ export class NotificationsService {
     };
   }
 
-  /** Used by `MessagingService` when a conversation is marked read, so a `MESSAGE_NEW`
-   * notification doesn't keep sitting unread in the bell once the recipient has actually opened
-   * that chat — without this, every message would leave a permanent unread notification behind
-   * even though the person already saw it. Matches on the connectionId recorded in the
-   * notification's own payload at creation time. */
+  /** Used by `MessagingService` when a conversation is marked read. Since the bell's `MESSAGE_NEW`
+   * row is now a single per-user aggregate (see `createOrBumpMessageNotification`), reading one
+   * conversation doesn't necessarily mean the whole row is read — this removes just this
+   * connection's share of it, and only actually marks the row read once every connection's share
+   * is gone (i.e. nothing left unread anywhere). Without this, every message would leave a
+   * permanently unread aggregate behind even after the person read every conversation. */
   async markReadForConnection(userId: string, connectionId: string): Promise<void> {
-    await this.prisma.client.notification.updateMany({
-      where: {
-        userId,
-        type: 'MESSAGE_NEW',
-        readAt: null,
-        payload: { path: ['connectionId'], equals: connectionId },
-      },
-      data: { readAt: new Date() },
+    const existing = await this.prisma.client.notification.findFirst({
+      where: { userId, type: 'MESSAGE_NEW', readAt: null },
     });
+    if (!existing) return;
+
+    const payload = existing.payload as unknown as MessageNewPayload;
+    if (!(connectionId in payload.countByConnection)) return;
+
+    const countByConnection = { ...payload.countByConnection };
+    const previewsByConnection = { ...payload.previewsByConnection };
+    delete countByConnection[connectionId];
+    delete previewsByConnection[connectionId];
+
+    if (Object.keys(countByConnection).length === 0) {
+      await this.prisma.client.notification.update({ where: { id: existing.id }, data: { readAt: new Date() } });
+    } else {
+      await this.prisma.client.notification.update({
+        where: { id: existing.id },
+        data: { payload: { countByConnection, previewsByConnection } as unknown as Prisma.InputJsonValue },
+      });
+    }
   }
 
   async markRead(userId: string, notificationId: string): Promise<{ success: true }> {

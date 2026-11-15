@@ -13,6 +13,10 @@ import {
 } from '../src/hooks/notification-hooks';
 import { colors, radius, spacing, typography } from '../src/theme/tokens';
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
 function formatWhen(iso: string): string {
   return new Date(iso).toLocaleString(undefined, {
     weekday: 'short',
@@ -56,23 +60,28 @@ function describe(n: Notification): { title: string; body: string; onPress?: () 
       };
     }
     case 'MESSAGE_NEW': {
-      const connectionId = String(n.payload.connectionId ?? '');
-      const senderName = n.payload.fromUserDisplayName ? String(n.payload.fromUserDisplayName) : 'Someone';
-      const previews = Array.isArray(n.payload.previews)
-        ? n.payload.previews.filter((p): p is string => typeof p === 'string')
-        : n.payload.preview
-          ? [String(n.payload.preview)]
-          : [];
-      const count = Number(n.payload.count) || 1;
-      return {
-        // Several messages from the same conversation bump one notification in place (see
-        // `NotificationsService.createOrBumpMessageNotification`) rather than piling up a
-        // separate row per message — title reflects the count, body shows every kept message
-        // (newest last), not just the one that most recently bumped it.
-        title: count > 1 ? `${senderName} (${count} new messages)` : senderName,
-        body: previews.length > 0 ? previews.join('\n') : 'You have a new message.',
-        onPress: connectionId ? () => router.push(`/chat/${connectionId}`) : undefined,
-      };
+      // One aggregate notification for every unread message across every conversation, not one
+      // per conversation (see `NotificationsService.createOrBumpMessageNotification`) — the
+      // per-conversation detail belongs to the Chats list itself, which already shows its own
+      // unread state per chat, so tapping this always goes there rather than to one specific chat.
+      const countByConnection = isRecord(n.payload.countByConnection) ? n.payload.countByConnection : {};
+      const previewsByConnection = isRecord(n.payload.previewsByConnection) ? n.payload.previewsByConnection : {};
+      const conversationIds = Object.keys(countByConnection);
+      const totalCount = conversationIds.reduce((sum, id) => sum + (Number(countByConnection[id]) || 0), 0);
+      const senderNames = conversationIds
+        .map((id) => {
+          const entry = previewsByConnection[id];
+          return isRecord(entry) && typeof entry.fromUserDisplayName === 'string' ? entry.fromUserDisplayName : undefined;
+        })
+        .filter((name): name is string => !!name);
+
+      const title =
+        conversationIds.length > 1
+          ? `Unread messages from ${conversationIds.length} people`
+          : (senderNames[0] ?? 'New message');
+      const body =
+        totalCount > 1 ? `You have ${totalCount} unread messages — tap to view your chats.` : 'You have a new message.';
+      return { title, body, onPress: () => router.push('/(tabs)/chats') };
     }
     case 'REPORT_WARNING':
       return {
