@@ -43,7 +43,7 @@ export class AeroDataBoxFlightProvider implements IFlightProvider {
     const parsed = (raw ?? [])
       .map((record) => parseAeroDataBoxFlight(record, departureDate))
       .filter((c): c is ParsedCandidate => c !== undefined);
-    return Promise.all(parsed.map((p) => this.toCandidate(p)));
+    return this.toCandidates(parsed);
   }
 
   /** Every scheduled departure from `departureAirportIata` on the given local date, across all
@@ -82,7 +82,21 @@ export class AeroDataBoxFlightProvider implements IFlightProvider {
     const parsed = rawFlights
       .map((record) => parseAeroDataBoxFlight(record, date, departureAirportIata))
       .filter((c): c is ParsedCandidate => c !== undefined);
-    return Promise.all(parsed.map((p) => this.toCandidate(p)));
+    return this.toCandidates(parsed);
+  }
+
+  /** Sequential, not `Promise.all` — a schedule search can return dozens of records, and each
+   * one resolves to 3 database queries (`ensureAirport` x2, `ensureAirline`). Firing all of them
+   * at once overwhelmed Supabase's session-mode pooler (a hard limit of 15 concurrent clients)
+   * and crashed the whole request with connection-pool timeouts in production. A few dozen
+   * sequential upserts (most of which just hit an existing row) is fast enough that trading away
+   * that parallelism costs nothing noticeable here. */
+  private async toCandidates(parsed: ParsedCandidate[]): Promise<FlightCandidate[]> {
+    const candidates: FlightCandidate[] = [];
+    for (const p of parsed) {
+      candidates.push(await this.toCandidate(p));
+    }
+    return candidates;
   }
 
   private requireConfig() {
