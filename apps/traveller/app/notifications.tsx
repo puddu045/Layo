@@ -13,10 +13,6 @@ import {
 } from '../src/hooks/notification-hooks';
 import { colors, radius, spacing, typography } from '../src/theme/tokens';
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
-
 function formatWhen(iso: string): string {
   return new Date(iso).toLocaleString(undefined, {
     weekday: 'short',
@@ -29,18 +25,22 @@ function formatWhen(iso: string): string {
 
 function describe(n: Notification): { title: string; body: string; onPress?: () => void } {
   switch (n.type) {
-    case 'CONNECTION_REQUEST':
+    case 'CONNECTION_REQUEST': {
+      const fromName = typeof n.payload.fromUserDisplayName === 'string' ? n.payload.fromUserDisplayName : 'Someone';
       return {
-        title: 'New connection request',
-        body: "Check your Chats tab to accept or decline.",
+        title: `${fromName} sent you a connection request`,
+        body: 'Check your Chats tab to accept or decline.',
         onPress: () => router.push('/(tabs)/chats'),
       };
-    case 'CONNECTION_ACCEPTED':
+    }
+    case 'CONNECTION_ACCEPTED': {
+      const byName = typeof n.payload.byUserDisplayName === 'string' ? n.payload.byUserDisplayName : 'Someone';
       return {
-        title: 'Connection accepted',
+        title: `${byName} accepted your connection request`,
         body: "You're now connected — say hello in Chats.",
         onPress: () => router.push('/(tabs)/chats'),
       };
+    }
     case 'BUSINESS_STATUS_CHANGED': {
       const status = String(n.payload.status ?? '');
       return {
@@ -58,30 +58,6 @@ function describe(n: Notification): { title: string; body: string; onPress?: () 
         title: `Deal ${status.toLowerCase()}`,
         body: status === 'APPROVED' ? 'Your deal is now live for travellers.' : `Your deal was rejected${reason}.`,
       };
-    }
-    case 'MESSAGE_NEW': {
-      // One aggregate notification for every unread message across every conversation, not one
-      // per conversation (see `NotificationsService.createOrBumpMessageNotification`) — the
-      // per-conversation detail belongs to the Chats list itself, which already shows its own
-      // unread state per chat, so tapping this always goes there rather than to one specific chat.
-      const countByConnection = isRecord(n.payload.countByConnection) ? n.payload.countByConnection : {};
-      const previewsByConnection = isRecord(n.payload.previewsByConnection) ? n.payload.previewsByConnection : {};
-      const conversationIds = Object.keys(countByConnection);
-      const totalCount = conversationIds.reduce((sum, id) => sum + (Number(countByConnection[id]) || 0), 0);
-      const senderNames = conversationIds
-        .map((id) => {
-          const entry = previewsByConnection[id];
-          return isRecord(entry) && typeof entry.fromUserDisplayName === 'string' ? entry.fromUserDisplayName : undefined;
-        })
-        .filter((name): name is string => !!name);
-
-      const title =
-        conversationIds.length > 1
-          ? `Unread messages from ${conversationIds.length} people`
-          : (senderNames[0] ?? 'New message');
-      const body =
-        totalCount > 1 ? `You have ${totalCount} unread messages — tap to view your chats.` : 'You have a new message.';
-      return { title, body, onPress: () => router.push('/(tabs)/chats') };
     }
     case 'REPORT_WARNING':
       return {

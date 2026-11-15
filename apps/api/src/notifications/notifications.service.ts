@@ -3,20 +3,24 @@ import type { Prisma } from '@layo/db';
 import { socketEvents, type ListNotificationsQuery, type Notification, type NotificationPage } from '@layo/contracts';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
+import { RedisService } from '../common/redis/redis.service';
 
 const EXPO_PUSH_API_URL = 'https://exp.host/--/api/v2/push/send';
 // Caps how many individual message previews a bumped notification keeps — unbounded growth here
 // would bloat the FCM data payload (there's a hard ~4KB limit on it) for a conversation nobody's
-// opened in a while. The oldest previews fall off first; `countByConnection` still tracks the
-// true total per conversation.
+// opened in a while. The oldest previews fall off first; `count` still tracks the true total.
 const MAX_PREVIEWS = 5;
+// Just UI-aggregation state for the OS push's stacked preview text, not data anyone needs kept
+// around — a day is generous for "how many unread messages has this conversation accumulated".
+const MESSAGE_PREVIEW_TTL_SECONDS = 24 * 60 * 60;
 
-/** The single, per-user `MESSAGE_NEW` notification's payload shape — see
- * `createOrBumpMessageNotification`'s own comment for why this is keyed by connection
- * internally despite there only ever being one row. */
-interface MessageNewPayload {
-  countByConnection: Record<string, number>;
-  previewsByConnection: Record<string, { fromUserDisplayName: string; previews: string[] }>;
+/** OS-push-only accumulation state for one unread conversation, keyed per
+ * user+connection in Redis — see `createOrBumpMessageNotification`'s comment for why this no
+ * longer lives in the `Notification` table at all. */
+interface MessagePreviewState {
+  fromUserDisplayName: string;
+  count: number;
+  previews: string[];
 }
 
 @Injectable()
@@ -26,6 +30,7 @@ export class NotificationsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly gateway: RealtimeGateway,
+    private readonly redis: RedisService,
   ) {}
 
   /** Used by other modules (connections, businesses, deals) to raise a notification — never
@@ -48,17 +53,14 @@ export class NotificationsService {
     await Promise.all(admins.map((admin) => this.create(admin.id, type, payload)));
   }
 
-  /** Used by `MessagingService` for every new message. Unlike the OS push below (still one
-   * per-conversation system-tray entry, so it can keep deep-linking to the right chat on tap),
-   * the in-app bell deliberately collapses every unread message, from any conversation or
-   * sender, into ONE notification row per user — the Chats list itself is where per-conversation
-   * detail belongs (it already shows its own per-chat unread state from `Message.readAt`), so the
-   * bell only needs to say "you have unread messages" and send you there.
-   *
-   * The row's payload still tracks state *per connection* internally (`countByConnection`,
-   * `previewsByConnection`) purely so `markReadForConnection` can remove just that conversation's
-   * share when it's read, without guessing at the others — the row only actually clears once
-   * every connection's contribution is gone. */
+  /** Used by `MessagingService` for every new message. Messages no longer raise an in-app bell
+   * notification at all — the Chats tab's own unread-message badge
+   * (`ConnectionsService.getTotalUnreadCount`) is where that lives now, so the bell stays
+   * reserved for `CONNECTION_REQUEST`/`CONNECTION_ACCEPTED`. This only drives the OS push: a
+   * short-lived Redis entry, keyed per user+connection, accumulates the running count/preview
+   * text so a second message before the first is read still shows a stacked preview (replacing
+   * the previous OS notification via `tag`, not creating a second one) rather than silently
+   * overwriting it with just the newest line. */
   async createOrBumpMessageNotification(
     userId: string,
     connectionId: string,
@@ -66,44 +68,21 @@ export class NotificationsService {
     fromUserDisplayName: string,
     preview: string,
   ): Promise<void> {
-    const existing = await this.prisma.client.notification.findFirst({
-      where: { userId, type: 'MESSAGE_NEW', readAt: null },
-    });
+    const key = this.messagePreviewKey(userId, connectionId);
+    const existing = await this.redis.getJson<MessagePreviewState>(key);
 
-    const existingPayload = existing?.payload as MessageNewPayload | undefined;
-    const countByConnection = { ...existingPayload?.countByConnection };
-    const previewsByConnection = { ...existingPayload?.previewsByConnection };
-
-    countByConnection[connectionId] = (countByConnection[connectionId] ?? 0) + 1;
-    previewsByConnection[connectionId] = {
+    const state: MessagePreviewState = {
       fromUserDisplayName,
-      previews: [...(previewsByConnection[connectionId]?.previews ?? []), preview].slice(-MAX_PREVIEWS),
+      count: (existing?.count ?? 0) + 1,
+      previews: [...(existing?.previews ?? []), preview].slice(-MAX_PREVIEWS),
     };
+    await this.redis.setJson(key, state, MESSAGE_PREVIEW_TTL_SECONDS);
 
-    const payload: MessageNewPayload = { countByConnection, previewsByConnection };
-    const row = existing
-      ? await this.prisma.client.notification.update({
-          where: { id: existing.id },
-          data: { createdAt: new Date(), payload: payload as unknown as Prisma.InputJsonValue },
-        })
-      : await this.prisma.client.notification.create({
-          data: { userId, type: 'MESSAGE_NEW', payload: payload as unknown as Prisma.InputJsonValue },
-        });
-
-    this.gateway.emitToUser(userId, socketEvents.NOTIFICATION_NEW, this.toNotification(row));
-
-    // OS push: still scoped to this one conversation, so the system tray keeps stacking/replacing
-    // per conversation and tapping it deep-links to the right chat — independent of the bell's
-    // aggregate row above.
-    const count = countByConnection[connectionId]!;
-    const title = count > 1 ? `${fromUserDisplayName} (${count} new messages)` : fromUserDisplayName;
-    await this.sendExpoPush(
-      userId,
-      title,
-      previewsByConnection[connectionId]!.previews.join('\n'),
-      `message-${connectionId}`,
-      { connectionId, type: 'MESSAGE_NEW' },
-    );
+    const title = state.count > 1 ? `${fromUserDisplayName} (${state.count} new messages)` : fromUserDisplayName;
+    await this.sendExpoPush(userId, title, state.previews.join('\n'), `message-${connectionId}`, {
+      connectionId,
+      type: 'MESSAGE_NEW',
+    });
   }
 
   async list(userId: string, query: ListNotificationsQuery): Promise<NotificationPage> {
@@ -127,34 +106,15 @@ export class NotificationsService {
     };
   }
 
-  /** Used by `MessagingService` when a conversation is marked read. Since the bell's `MESSAGE_NEW`
-   * row is now a single per-user aggregate (see `createOrBumpMessageNotification`), reading one
-   * conversation doesn't necessarily mean the whole row is read — this removes just this
-   * connection's share of it, and only actually marks the row read once every connection's share
-   * is gone (i.e. nothing left unread anywhere). Without this, every message would leave a
-   * permanently unread aggregate behind even after the person read every conversation. */
+  /** Used by `MessagingService` when a conversation is marked read — clears that conversation's
+   * OS-push accumulation state (see `createOrBumpMessageNotification`) so the next message
+   * starts a fresh preview instead of appending to an already-read one. */
   async markReadForConnection(userId: string, connectionId: string): Promise<void> {
-    const existing = await this.prisma.client.notification.findFirst({
-      where: { userId, type: 'MESSAGE_NEW', readAt: null },
-    });
-    if (!existing) return;
+    await this.redis.del(this.messagePreviewKey(userId, connectionId));
+  }
 
-    const payload = existing.payload as unknown as MessageNewPayload;
-    if (!(connectionId in payload.countByConnection)) return;
-
-    const countByConnection = { ...payload.countByConnection };
-    const previewsByConnection = { ...payload.previewsByConnection };
-    delete countByConnection[connectionId];
-    delete previewsByConnection[connectionId];
-
-    if (Object.keys(countByConnection).length === 0) {
-      await this.prisma.client.notification.update({ where: { id: existing.id }, data: { readAt: new Date() } });
-    } else {
-      await this.prisma.client.notification.update({
-        where: { id: existing.id },
-        data: { payload: { countByConnection, previewsByConnection } as unknown as Prisma.InputJsonValue },
-      });
-    }
+  private messagePreviewKey(userId: string, connectionId: string): string {
+    return `message-push-preview:${userId}:${connectionId}`;
   }
 
   async markRead(userId: string, notificationId: string): Promise<{ success: true }> {

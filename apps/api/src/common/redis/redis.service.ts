@@ -37,6 +37,15 @@ export class RedisService implements OnModuleDestroy {
     }
   }
 
+  /** Best-effort cache delete. Never throws. */
+  async del(key: string): Promise<void> {
+    try {
+      await this.client.del(key);
+    } catch {
+      // caching is an optimisation, not a correctness requirement
+    }
+  }
+
   async onModuleDestroy() {
     this.client.disconnect();
   }

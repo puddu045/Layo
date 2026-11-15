@@ -2,6 +2,7 @@ import { StyleSheet, View } from 'react-native';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, radius } from '../../src/theme/tokens';
+import { useConnectionsUnreadCount } from '../../src/hooks/chat-hooks';
 
 type IconName = keyof typeof Ionicons.glyphMap;
 
@@ -16,6 +17,9 @@ function tabIcon(outlineName: IconName, filledName: IconName) {
 }
 
 export default function TabsLayout() {
+  const unreadMessages = useConnectionsUnreadCount();
+  const unreadBadge = unreadMessages.data ? (unreadMessages.data > 99 ? '99+' : String(unreadMessages.data)) : undefined;
+
   return (
     <Tabs
       screenOptions={{
@@ -44,6 +48,7 @@ export default function TabsLayout() {
         options={{
           title: 'Chats',
           tabBarIcon: tabIcon('chatbubble-outline', 'chatbubble'),
+          tabBarBadge: unreadBadge,
         }}
       />
       <Tabs.Screen

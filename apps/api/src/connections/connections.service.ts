@@ -144,6 +144,22 @@ export class ConnectionsService {
     return this.toConnectionDtos(rows, userId);
   }
 
+  /** Drives the Chats tab's badge — total unread messages across every accepted connection, in
+   * one query, independent of loading the connections list itself (the badge needs to update
+   * from anywhere in the app, not just while Chats is open). */
+  async getTotalUnreadCount(userId: string): Promise<number> {
+    return this.prisma.client.message.count({
+      where: {
+        senderId: { not: userId },
+        readAt: null,
+        connection: {
+          status: 'ACCEPTED',
+          OR: [{ requesterId: userId }, { addresseeId: userId }],
+        },
+      },
+    });
+  }
+
   /** Used by MessagingService to verify a user may read/send on a connection. */
   async requireAcceptedParticipant(userId: string, connectionId: string) {
     const connection = await this.requireConnection(connectionId);
@@ -157,11 +173,26 @@ export class ConnectionsService {
   }
 
   private async notifyConnectionRequest(addresseeUserId: string, connectionId: string, fromUserId: string) {
-    await this.notificationsService.create(addresseeUserId, 'CONNECTION_REQUEST', { connectionId, fromUserId });
+    const fromUserDisplayName = await this.getDisplayName(fromUserId);
+    await this.notificationsService.create(addresseeUserId, 'CONNECTION_REQUEST', {
+      connectionId,
+      fromUserId,
+      fromUserDisplayName,
+    });
   }
 
   private async notifyConnectionAccepted(requesterUserId: string, connectionId: string, byUserId: string) {
-    await this.notificationsService.create(requesterUserId, 'CONNECTION_ACCEPTED', { connectionId, byUserId });
+    const byUserDisplayName = await this.getDisplayName(byUserId);
+    await this.notificationsService.create(requesterUserId, 'CONNECTION_ACCEPTED', {
+      connectionId,
+      byUserId,
+      byUserDisplayName,
+    });
+  }
+
+  private async getDisplayName(userId: string): Promise<string> {
+    const profile = await this.prisma.client.profile.findUnique({ where: { userId }, select: { displayName: true } });
+    return profile?.displayName ?? 'Someone';
   }
 
   private async requireConnection(connectionId: string) {

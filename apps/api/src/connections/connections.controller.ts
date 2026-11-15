@@ -23,6 +23,11 @@ export class ConnectionsController {
     return this.connectionsService.list(user.id, query);
   }
 
+  @Get('unread-count')
+  async unreadCount(@CurrentUser() user: RequestUser) {
+    return { count: await this.connectionsService.getTotalUnreadCount(user.id) };
+  }
+
   @Post()
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   create(

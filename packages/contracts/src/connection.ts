@@ -56,3 +56,11 @@ export const listConnectionsQuerySchema = z.object({
   status: connectionStatusSchema.optional(),
 });
 export type ListConnectionsQuery = z.infer<typeof listConnectionsQuerySchema>;
+
+/** Total unread messages across every accepted connection — drives the Chats tab's badge, not
+ * the in-app notification bell (which no longer shows messages at all; see the Notification
+ * `type` values this app actually raises). */
+export const connectionsUnreadCountSchema = z.object({
+  count: z.number().int(),
+});
+export type ConnectionsUnreadCount = z.infer<typeof connectionsUnreadCountSchema>;

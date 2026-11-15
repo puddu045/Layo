@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   socketEvents,
   type Connection,
+  type ConnectionsUnreadCount,
   type ConnectionStatus,
   type CreateConnectionRequest,
   type Message,
@@ -54,6 +55,17 @@ export function useCancelConnection() {
   return useMutation({
     mutationFn: (connectionId: string) => api.post<Connection>(`/connections/${connectionId}/cancel`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['connections'] }),
+  });
+}
+
+/** Drives the Chats tab icon's badge — total unread messages across every accepted connection,
+ * kept live by the same `MESSAGE_NEW`/`MESSAGE_READ` socket listener as the Chats list itself
+ * (see `useRealtimeMessages`, which invalidates this same query key). */
+export function useConnectionsUnreadCount() {
+  return useQuery({
+    queryKey: ['connections', 'unread-count'],
+    queryFn: () => api.get<ConnectionsUnreadCount>('/connections/unread-count'),
+    select: (data) => data.count,
   });
 }
 
@@ -160,6 +172,8 @@ export function useRealtimeMessages(activeConnectionId?: string) {
 
       if (activeConnectionId) socket.emit('chat:join', { connectionId: activeConnectionId });
 
+      // Invalidating the ['connections'] prefix also covers ['connections', 'unread-count']
+      // (see `useConnectionsUnreadCount`) — React Query matches by key prefix, not exact key.
       const onNew = (payload: { connectionId: string }) => {
         queryClient.invalidateQueries({ queryKey: ['messages', payload.connectionId] });
         queryClient.invalidateQueries({ queryKey: ['connections'] });
