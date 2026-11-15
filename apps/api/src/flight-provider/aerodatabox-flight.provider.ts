@@ -7,6 +7,7 @@ import { AeroDataBoxQuotaService, AeroDataBoxQuotaExceededError } from './aeroda
 import type { IFlightProvider } from './flight-provider.interface';
 import {
   buildDailyWindows,
+  isParsedCandidate,
   parseAeroDataBoxFlight,
   type AeroDataBoxAirportFidsResponse,
   type AeroDataBoxAirportFlight,
@@ -95,12 +96,22 @@ export class AeroDataBoxFlightProvider implements IFlightProvider {
 
   /** The one step that actually touches the database — scoped to just the flights going to
    * `destinationAirportIata`, which for a busy hub's full-day schedule is typically a handful out
-   * of what can be dozens of records overall. */
+   * of what can be dozens of records overall.
+   *
+   * `schedule` isn't trusted to actually be a `ParsedCandidate[]` just because that's what this
+   * provider itself writes to the cache — it came back out of `FlightScheduleCache`, a column
+   * this app's own earlier (pre-this-split) code also wrote to, in the old fully-resolved
+   * `FlightCandidate[]` shape. A row written before this change, read back after it deployed,
+   * crashed the whole request on a missing `.arrival`. Every entry is validated before use, same
+   * as every other "don't trust the wire, don't invent data" check in this provider — an
+   * unrecognized entry is just dropped, not treated as a fatal error. */
   async resolveDeparturesForDestination(
     schedule: unknown,
     destinationAirportIata: string,
   ): Promise<FlightCandidate[]> {
-    const matching = (schedule as ParsedCandidate[]).filter((c) => c.arrival.iataCode === destinationAirportIata);
+    const matching = (Array.isArray(schedule) ? schedule : [])
+      .filter(isParsedCandidate)
+      .filter((c) => c.arrival.iataCode === destinationAirportIata);
     return this.toCandidates(matching);
   }
 

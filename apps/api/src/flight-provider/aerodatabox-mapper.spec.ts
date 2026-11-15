@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   addDaysToIsoDate,
   buildDailyWindows,
+  isParsedCandidate,
   mapAeroDataBoxStatus,
   parseAeroDataBoxFlight,
   type AeroDataBoxAirportFlight,
@@ -132,6 +133,34 @@ describe('buildDailyWindows', () => {
       { fromLocal: '2026-06-01T00:00', toLocal: '2026-06-01T12:00' },
       { fromLocal: '2026-06-01T12:00', toLocal: '2026-06-02T00:00' },
     ]);
+  });
+});
+
+describe('isParsedCandidate', () => {
+  it('accepts a real ParsedCandidate', () => {
+    const parsed = parseAeroDataBoxFlight(flightRecord(), '2026-06-01');
+    expect(isParsedCandidate(parsed)).toBe(true);
+  });
+
+  it('rejects data cached under the old, pre-split FlightCandidate shape', () => {
+    // The actual production incident: FlightScheduleCache used to store fully-resolved
+    // FlightCandidate objects (departureAirport/arrivalAirport), before the cache was changed to
+    // store pre-resolution ParsedCandidate objects (departure/arrival) instead. A row written
+    // under the old shape, read back by the new code, must be dropped, not crash.
+    const oldShape = {
+      providerRef: 'aerodatabox:BA123:2026-06-01',
+      flightNumber: 'BA123',
+      departureAirport: { iataCode: 'LHR' },
+      arrivalAirport: { iataCode: 'NCL' },
+    };
+    expect(isParsedCandidate(oldShape)).toBe(false);
+  });
+
+  it('rejects non-objects and null', () => {
+    expect(isParsedCandidate(null)).toBe(false);
+    expect(isParsedCandidate(undefined)).toBe(false);
+    expect(isParsedCandidate('BA123')).toBe(false);
+    expect(isParsedCandidate(42)).toBe(false);
   });
 });
 

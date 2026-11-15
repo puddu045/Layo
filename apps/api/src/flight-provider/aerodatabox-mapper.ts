@@ -96,6 +96,27 @@ export interface ParsedCandidate {
   arrival: ParsedLeg;
 }
 
+function isParsedLeg(value: unknown): value is ParsedLeg {
+  if (typeof value !== 'object' || value === null) return false;
+  const leg = value as Partial<ParsedLeg>;
+  return typeof leg.iataCode === 'string' && typeof leg.scheduledUtc === 'string';
+}
+
+/** Validates a value read back from `FlightScheduleCache` actually looks like a `ParsedCandidate`
+ * before trusting it — a row written under a since-changed cache format (this cache has already
+ * changed shape once) would otherwise crash whatever reads it instead of just being treated as
+ * unusable, the same "never trust unvalidated data" rule everything else in this file follows. */
+export function isParsedCandidate(value: unknown): value is ParsedCandidate {
+  if (typeof value !== 'object' || value === null) return false;
+  const candidate = value as Partial<ParsedCandidate>;
+  return (
+    typeof candidate.providerRef === 'string' &&
+    typeof candidate.flightNumber === 'string' &&
+    isParsedLeg(candidate.departure) &&
+    isParsedLeg(candidate.arrival)
+  );
+}
+
 // Confirmed against a real response: AeroDataBox writes this as "2026-11-16 06:00Z" — a space,
 // not the "T" the ECMAScript Date parser's ISO format actually requires between date and time.
 // `Date`'s leniency with this varies by engine, so it's normalized explicitly rather than relied
