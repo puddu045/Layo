@@ -11,7 +11,7 @@ interface CardProps extends ViewProps {
 
 /**
  * The default surface for everything from match cards to deal cards: a
- * solid white panel over the app's pastel-blue background wash, with a
+ * solid white panel over the app's pastel-peach background wash, with a
  * hairline border and a subtle shadow for lift.
  */
 export function Card({ style, children, variant = 'solid', ...rest }: CardProps) {

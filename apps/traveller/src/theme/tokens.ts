@@ -1,9 +1,8 @@
 /**
- * Design tokens for the traveller app: a pastel-blue palette. `navy900` is
- * the text-ink colour; `primary` is the one action colour for every
- * interactive surface app-wide — buttons, the active tab, links. Cards are
- * solid white (`surface`) on the soft blue `background`/`gradients.screen`
- * wash, not translucent glass — see `Card`.
+ * Design tokens for the traveller app: a pastel-peach wash with navy-blue ink and accents.
+ * `navy900` is the text-ink colour; `primary` is the one action colour for every interactive
+ * surface app-wide — buttons, the active tab, links. Cards are solid white (`surface`) on the
+ * soft peach `background`/`gradients.screen` wash, not translucent glass — see `Card`.
  */
 export const colors = {
   navy900: '#17365D',
@@ -29,9 +28,9 @@ export const colors = {
 
   // Base surfaces
   white: '#FFFFFF',
-  background: '#EFF7FF',
+  background: '#FFE8DA',
   surface: '#FFFFFF',
-  border: '#DCEAF7',
+  border: '#F3DCC8',
 
   // Text
   textPrimary: '#17324D',
@@ -52,13 +51,20 @@ export const colors = {
 };
 
 export const gradients = {
+  // The plane's window "sky", inside the cabin-window mark — kept blue regardless of the app's
+  // own peach wash, since it's meant to read as sky glimpsed through a window, not the page
+  // background.
   hero: ['#A9D6F5', '#D7ECFB', '#EFF7FF'] as const,
 
   primaryButton: ['#3E8FD6', '#2878C7'] as const,
 
-  screen: ['#E3F2FD', '#EFF7FF', '#FAFCFF'] as const,
+  // The app-wide background wash (see `GlassBackground`) — every screen except the welcome
+  // carousel sits on this.
+  screen: ['#FFE4D2', '#FFEEE3', '#FFF9F5'] as const,
 
-  welcomeSky: ['#B8DCFA', '#D9ECFF', '#F3F9FF'] as const,
+  // The richer, more saturated variant — the welcome screen's full-bleed background, and
+  // `GlassBackground`'s "bold" variant for any other screen with no dense text to protect.
+  welcomeSky: ['#FFD9BE', '#FFE7D5', '#FFF4EC'] as const,
 };
 
 export const spacing = {

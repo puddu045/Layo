@@ -179,35 +179,27 @@ export default function Welcome() {
   // itself is narrower than this cap long before the photo's own geometry would be the limit.
   const airportImageMaxWidth = airportImageHeight * (1200 / 360) * 2;
 
-  // Nothing on this screen scrolls. Instead, two things adapt, in order of priority — the
-  // footer (both buttons, the age notice) always renders at full size no matter what, because
-  // it's what this whole screen exists for:
-  //  1. The pitch card: all three pitches stacked together when there's room, or one at a time
-  //     auto-advancing through them when there isn't.
-  //  2. The hero window-art mark: shown normally, but dropped (keeping just the title) if even
-  //     the full hero plus the footer wouldn't fit together — this is what actually guarantees
-  //     the footer, since a flex `middle` region can shrink to nothing on its own, but the hero
-  //     and footer are both normal, non-shrinking content; without this, hero+footer could
-  //     together still exceed the screen and overflow past the footer's own box (which is
-  //     exactly what happened on short, wide windows before this existed).
-  // All of this needs each piece's *actual* rendered height — text wraps differently at
-  // different widths, so no fixed pixel budget predicts it reliably. Hidden off-screen copies
-  // (below, never visible or interactive, but the same width as the real content) are measured
-  // via onLayout the same way the real ones would be. Until a measurement is in, its smaller/
-  // safer variant is assumed — the carousel over the full list, the compact hero over the full
-  // one — since guessing small can only under-fill the screen, never overflow it.
+  // Nothing on this screen scrolls, normally. The hero window-art mark and the footer (both
+  // buttons, the age notice) always render at full size no matter what — the window mark is the
+  // one piece of brand identity this screen exists to show, so it's never dropped for a short
+  // screen the way it used to be. Only the pitch card adapts: all three pitches stacked together
+  // when there's room, or one at a time auto-advancing through them when there isn't. If even
+  // that can't make everything fit, the ScrollView below (`minHeight: height`, never otherwise
+  // engaged) takes over rather than clipping or hiding anything.
+  // This needs each piece's *actual* rendered height — text wraps differently at different
+  // widths, so no fixed pixel budget predicts it reliably. A hidden off-screen copy of the full
+  // pitch list (below, never visible or interactive, but the same width as the real content) is
+  // measured via onLayout the same way the real one would be. Until a measurement is in, the
+  // carousel (its smaller/safer variant) is assumed, since guessing small can only under-fill the
+  // screen, never overflow it.
   const [fullHeroHeight, setFullHeroHeight] = useState<number | null>(null);
-  const [compactHeroHeight, setCompactHeroHeight] = useState<number | null>(null);
   const [footerHeight, setFooterHeight] = useState<number | null>(null);
   const [fullListHeight, setFullListHeight] = useState<number | null>(null);
 
-  const budgetForHeroAndCard = footerHeight === null ? null : height - footerHeight - airportImageHeight;
-  const showHeroArt =
-    budgetForHeroAndCard !== null && fullHeroHeight !== null && fullHeroHeight <= budgetForHeroAndCard;
-  const usedHeroHeight = showHeroArt ? fullHeroHeight : compactHeroHeight;
-
   const middleAvailable =
-    budgetForHeroAndCard === null || usedHeroHeight === null ? null : budgetForHeroAndCard - usedHeroHeight;
+    footerHeight === null || fullHeroHeight === null
+      ? null
+      : height - footerHeight - airportImageHeight - fullHeroHeight;
   const showFullList =
     middleAvailable !== null && fullListHeight !== null && fullListHeight <= middleAvailable;
 
@@ -228,12 +220,12 @@ export default function Welcome() {
         style={StyleSheet.absoluteFill}
       />
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
-        {/* A safety net, not the primary mechanism: the adaptive sizing above (showHeroArt,
-            showFullList) is what's supposed to make everything fit without scrolling. But its
-            measurements come from this device's own onLayout passes, so anything it doesn't
-            predict exactly right (a font metric quirk, a screen shorter than anyone tested)
-            previously meant the hero got silently squeezed past the top edge with no way to
-            reach it. `minHeight: height` on the content container keeps the layout pixel-
+        {/* A safety net, not the primary mechanism: the adaptive sizing above (showFullList) is
+            what's supposed to make everything fit without scrolling. But its measurements come
+            from this device's own onLayout passes, so anything it doesn't predict exactly right
+            (a font metric quirk, a screen shorter than anyone tested) previously meant content
+            got silently squeezed past the top edge with no way to reach it. `minHeight: height`
+            on the content container keeps the layout pixel-
             identical whenever things already fit (nothing to scroll, same as before) — it only
             starts scrolling once content genuinely exceeds the viewport, trading "permanently
             cut off" for "scroll to see the rest". */}
@@ -254,10 +246,10 @@ export default function Welcome() {
                 and a cloud-like wave clipped to it. The ring is a background-colour layer, not a
                 border — a translucent border renders solid and dark on web instead of blending
                 softly the way it does natively, so nesting plain-coloured views is what keeps
-                this looking the same on every platform. Dropped entirely (see `showHeroArt`
-                above) rather than shrunk, below a height where even showing it alongside the
-                footer wouldn't fit. */}
-            {showHeroArt && <HeroArt iconTranslate={iconTranslate} />}
+                this looking the same on every platform. Always shown, at full size, regardless
+                of screen height — the ScrollView fallback below (`minHeight: height`) takes over
+                instead of ever hiding it. */}
+            <HeroArt iconTranslate={iconTranslate} />
             <Wordmark />
             <Text style={styles.tagline}>{BRAND.tagline}</Text>
           </View>
@@ -311,16 +303,6 @@ export default function Welcome() {
               <Text style={styles.tagline}>{BRAND.tagline}</Text>
             </View>
           </View>
-          <View
-            style={styles.measureHidden}
-            pointerEvents="none"
-            onLayout={(e: LayoutChangeEvent) => setCompactHeroHeight(e.nativeEvent.layout.height)}
-          >
-            <View style={styles.hero}>
-              <Wordmark />
-              <Text style={styles.tagline}>{BRAND.tagline}</Text>
-            </View>
-          </View>
         </View>
         <Image
           source={require('../../assets/images/layo-airport-footer.png')}
@@ -341,10 +323,10 @@ const styles = StyleSheet.create({
   // its content's width instead of growing up to the cap, which defeats `alignSelf: 'center'`.
   // `minHeight: 0` overrides a flex item's default auto-minimum (its content's own natural size)
   // — without it, this could still be forced taller than its flex-allocated share by hero+footer
-  // alone even with `showHeroArt` doing its job, and the overflow spills into the image below it
-  // rather than being clipped or shrunk. The hero/footer adaptation above is the real fix; this
-  // is the standard belt-and-braces flexbox rule for "a flex child that must be allowed to
-  // shrink below its content size" — cheap to add, and correct regardless.
+  // alone, and the overflow spills into the image below it rather than being clipped or shrunk.
+  // The ScrollView fallback above is the real fix for genuine overflow; this is the standard
+  // belt-and-braces flexbox rule for "a flex child that must be allowed to shrink below its
+  // content size" — cheap to add, and correct regardless.
   contentColumn: { flex: 1, minHeight: 0, width: '100%', maxWidth: 480, alignSelf: 'center' },
   hero: { alignItems: 'center', paddingTop: spacing.lg, paddingHorizontal: spacing.lg },
   // `overflow: 'hidden'` is a safety net, not the primary mechanism: at an extreme enough height
