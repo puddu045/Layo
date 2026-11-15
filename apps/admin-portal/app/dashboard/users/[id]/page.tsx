@@ -5,10 +5,12 @@ import { useParams, useRouter } from 'next/navigation';
 import type { AdminUserDetail } from '@layo/contracts';
 import { api } from '../../../../lib/api-client';
 import { StatusBadge } from '../../../../components/StatusBadge';
+import { useCurrentUser } from '../../../../lib/use-current-user';
 
 export default function UserDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const me = useCurrentUser();
   const [user, setUser] = useState<AdminUserDetail | undefined>();
   const [acting, setActing] = useState(false);
   const [reason, setReason] = useState('');
@@ -20,16 +22,24 @@ export default function UserDetailPage() {
   useEffect(refresh, [id]);
 
   const act = async (
-    action: 'warn' | 'suspend' | 'ban' | 'reinstate' | 'verify' | 'delete',
+    action: 'warn' | 'suspend' | 'ban' | 'reinstate' | 'verify' | 'delete' | 'hard-delete',
     confirmMessage?: string,
   ) => {
     if (confirmMessage && !window.confirm(confirmMessage)) return;
     setActing(true);
     try {
-      await api.patch(`/users/${id}/${action}`, action === 'verify' ? undefined : { reason: reason || undefined });
+      const body = action === 'verify' ? undefined : { reason: reason || undefined };
+      if (action === 'hard-delete') {
+        await api.delete(`/users/${id}/hard-delete`, body);
+      } else {
+        await api.patch(`/users/${id}/${action}`, body);
+      }
       setReason('');
+      if (action === 'delete' || action === 'hard-delete') {
+        router.push('/dashboard/users');
+        return;
+      }
       refresh();
-      if (action === 'delete') router.push('/dashboard/users');
     } finally {
       setActing(false);
     }
@@ -97,7 +107,27 @@ export default function UserDetailPage() {
                 disabled={acting}
               />
             )}
+            {me?.adminRole === 'SUPER_ADMIN' && (
+              <ActionButton
+                label="Hard delete account"
+                danger
+                onClick={() =>
+                  act(
+                    'hard-delete',
+                    `Permanently erase ${user.email}? This removes the account from Supabase Auth and this database entirely — all of their rows (profile, journeys, connections, messages sent, etc.) are gone for good, and that email becomes free to register again from scratch. This cannot be undone.`,
+                  )
+                }
+                disabled={acting}
+              />
+            )}
           </div>
+          {me?.adminRole === 'SUPER_ADMIN' && (
+            <p className="mt-2 text-xs text-slate-400">
+              &ldquo;Delete profile completely&rdquo; scrubs and locks the account but keeps the row. &ldquo;Hard delete
+              account&rdquo; removes it everywhere, including Supabase Auth — use this when the email needs to be free
+              to register again.
+            </p>
+          )}
         </div>
       </div>
 

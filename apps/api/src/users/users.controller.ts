@@ -133,4 +133,17 @@ export class UsersController {
   ) {
     return this.usersService.applyModerationAction(admin.id, userId, 'DELETE', dto.reason);
   }
+
+  /** Distinct from the soft `delete` route above — irreversible, so it's gated to SUPER_ADMIN
+   * rather than any MODERATOR. See `UsersService.hardDelete` for why this needs to exist at all. */
+  @Delete('users/:userId/hard-delete')
+  @UseGuards(AdminGuard, RoleGuard('SUPER_ADMIN'))
+  async hardDeleteUser(
+    @CurrentUser() admin: RequestUser,
+    @Param('userId') userId: string,
+    @Body(new ZodValidationPipe(userModerationRequestSchema)) dto: UserModerationRequest,
+  ) {
+    await this.usersService.hardDelete(admin.id, userId, dto.reason);
+    return { success: true };
+  }
 }

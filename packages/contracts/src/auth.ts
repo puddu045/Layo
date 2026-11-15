@@ -12,6 +12,16 @@ export const signInRequestSchema = z.object({
 });
 export type SignInRequest = z.infer<typeof signInRequestSchema>;
 
+export const requestPasswordResetRequestSchema = z.object({
+  email: z.string().trim().toLowerCase().email(),
+});
+export type RequestPasswordResetRequest = z.infer<typeof requestPasswordResetRequestSchema>;
+
+export const resetPasswordRequestSchema = z.object({
+  password: z.string().min(8, 'Password must be at least 8 characters'),
+});
+export type ResetPasswordRequest = z.infer<typeof resetPasswordRequestSchema>;
+
 export const authSessionSchema = z.object({
   accessToken: z.string(),
   refreshToken: z.string(),

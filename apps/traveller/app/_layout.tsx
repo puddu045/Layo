@@ -68,6 +68,7 @@ export default function RootLayout() {
           <Stack.Screen name="index" />
           <Stack.Screen name="(auth)" />
           <Stack.Screen name="auth/confirm" />
+          <Stack.Screen name="auth/reset-password" />
           <Stack.Screen
             name="profile-setup"
             options={{ headerShown: true, title: 'Set up your profile', gestureEnabled: false }}

@@ -11,6 +11,11 @@ import { api } from './api-client';
 // to the Site URL. `app/auth/confirm.tsx` is what actually receives this link.
 const EMAIL_CONFIRM_REDIRECT = Platform.OS === 'web' ? undefined : 'layo://auth/confirm';
 
+// Same reasoning as EMAIL_CONFIRM_REDIRECT above, for the "forgot password" email instead of the
+// signup confirmation one. Also needs `layo://auth/reset-password` added to the same Supabase
+// Redirect URLs allow list. `app/auth/reset-password.tsx` receives this one.
+const PASSWORD_RESET_REDIRECT = Platform.OS === 'web' ? undefined : 'layo://auth/reset-password';
+
 interface AuthMeResponse {
   id: string;
   email: string;
@@ -31,6 +36,9 @@ interface AuthContextValue {
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   resendConfirmation: (email: string) => Promise<void>;
+  requestPasswordReset: (email: string) => Promise<void>;
+  /** Only valid once a recovery deep link has called `setSession` — see `auth/reset-password.tsx`. */
+  updatePassword: (newPassword: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -105,6 +113,16 @@ export function AuthProvider({ children }: PropsWithChildren) {
           email,
           options: EMAIL_CONFIRM_REDIRECT ? { emailRedirectTo: EMAIL_CONFIRM_REDIRECT } : undefined,
         });
+        if (error) throw error;
+      },
+      requestPasswordReset: async (email) => {
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: PASSWORD_RESET_REDIRECT,
+        });
+        if (error) throw error;
+      },
+      updatePassword: async (newPassword) => {
+        const { error } = await supabase.auth.updateUser({ password: newPassword });
         if (error) throw error;
       },
     }),

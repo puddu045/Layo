@@ -13,6 +13,7 @@ import type {
 import { PrismaService } from '../common/prisma/prisma.service';
 import { AuditLogService } from '../common/audit/audit-log.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { SupabaseService } from '../common/supabase/supabase.service';
 import { toPublicProfile, type ProfileRow } from '../common/mappers/profile.mapper';
 
 @Injectable()
@@ -21,6 +22,7 @@ export class UsersService {
     private readonly prisma: PrismaService,
     private readonly auditLogService: AuditLogService,
     private readonly notificationsService: NotificationsService,
+    private readonly supabase: SupabaseService,
   ) {}
 
   async createProfile(userId: string, dto: CreateProfileRequest): Promise<OwnProfile> {
@@ -270,6 +272,41 @@ export class UsersService {
     }
 
     await this.auditLogService.record(adminId, action, 'User', userId, { reason });
+  }
+
+  /** Actually, permanently removes the account — unlike `DELETE` above, which only anonymizes
+   * and locks it. Needed because deleting just the local `User` row leaves the Supabase Auth
+   * identity (email, password hash, confirmation status) behind: re-registering with that email
+   * then silently does nothing (Supabase won't resend a confirmation to an already-registered,
+   * already-confirmed address), the old password still signs in, and `SupabaseAuthGuard`'s own
+   * upsert quietly recreates a blank local row for it on the next request — exactly what happened
+   * running a raw `DELETE FROM "User"` by hand. Reserved for SUPER_ADMIN given it's irreversible
+   * and takes out every row the schema cascades on this user (profile, journeys, connections,
+   * messages sent, push tokens, etc.) along with it. */
+  async hardDelete(adminId: string, userId: string, reason?: string): Promise<void> {
+    const user = await this.prisma.client.user.findUnique({ where: { id: userId } });
+    if (!user) throw new NotFoundException('User not found');
+
+    // Nulls out the attribution rather than letting the foreign key on AuditLog.actorAdminId
+    // block the delete outright — only matters if this user ever acted as an admin themselves,
+    // but the audit entries (and the history of whoever they moderated) are worth keeping either
+    // way.
+    await this.prisma.client.auditLog.updateMany({ where: { actorAdminId: userId }, data: { actorAdminId: null } });
+
+    // Logged before the delete, not after — targetId is a plain string, not a foreign key, so
+    // this entry survives the user row going away and still shows up in another admin's search.
+    await this.auditLogService.record(adminId, 'HARD_DELETE', 'User', userId, { reason, email: user.email });
+
+    const { error } = await this.supabase.admin.auth.admin.deleteUser(userId);
+    // A 404 here just means this identity was already gone from Supabase Auth (e.g. an earlier
+    // raw-SQL delete that skipped this step) — nothing left to remove there, so it isn't treated
+    // as a failure. Any other error blocks the local delete too: removing the local row while the
+    // Auth identity survives is exactly the broken, half-deleted state this method exists to avoid.
+    if (error && error.status !== 404) {
+      throw new BadRequestException(`Could not delete the Supabase Auth identity: ${error.message}`);
+    }
+
+    await this.prisma.client.user.delete({ where: { id: userId } });
   }
 
   private async assertAirportExists(iataCode: string) {

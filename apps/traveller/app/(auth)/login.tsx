@@ -72,6 +72,9 @@ export default function Login() {
           onChangeText={setEmail}
         />
         <TextField label="Password" secureTextEntry value={password} onChangeText={setPassword} />
+        <Link href="/(auth)/forgot-password" style={styles.forgotLink}>
+          Forgot password?
+        </Link>
         {error ? <Text style={styles.error}>{error}</Text> : null}
         {unconfirmed && (
           <View style={{ marginBottom: spacing.md }}>
@@ -97,6 +100,7 @@ const styles = StyleSheet.create({
   title: { ...typography.display, color: colors.navy900, marginBottom: spacing.xs },
   subtitle: { ...typography.body, color: colors.textSecondary, marginBottom: spacing.xl },
   error: { ...typography.caption, color: colors.danger, marginBottom: spacing.md },
+  forgotLink: { ...typography.caption, color: colors.primary, fontWeight: '600', textAlign: 'right', marginBottom: spacing.md },
   footer: { flexDirection: 'row', justifyContent: 'center', marginTop: spacing.lg, gap: spacing.xs },
   footerText: { ...typography.body, color: colors.textSecondary },
   link: { ...typography.body, color: colors.primary, fontWeight: '600' },
