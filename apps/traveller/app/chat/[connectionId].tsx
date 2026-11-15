@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
+  Animated,
   FlatList,
   KeyboardAvoidingView,
+  PanResponder,
   Platform,
   Pressable,
   StyleSheet,
@@ -219,6 +221,7 @@ export default function ChatScreen() {
                   isMine={item.senderId === session?.user.id}
                   resolveSenderLabel={replySenderLabel}
                   onLongPress={() => setActionsTarget(item)}
+                  onSwipeReply={() => setReplyTo(item)}
                 />
               )}
             />
@@ -302,38 +305,81 @@ export default function ChatScreen() {
   );
 }
 
+// How far right a swipe has to travel before releasing it commits to a reply, and the cap on
+// how far the bubble is ever allowed to visually slide — small enough that even a "mine" bubble
+// (already docked against the row's right edge) has room to move without overshooting the screen.
+const SWIPE_REPLY_TRIGGER = 56;
+const SWIPE_REPLY_MAX = 64;
+
 function MessageBubble({
   message,
   isMine,
   resolveSenderLabel,
   onLongPress,
+  onSwipeReply,
 }: {
   message: Message;
   isMine: boolean;
   resolveSenderLabel: (senderId: string) => string;
   onLongPress: () => void;
+  onSwipeReply: () => void;
 }) {
   const time = new Date(message.createdAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+
+  const translateX = useRef(new Animated.Value(0)).current;
+  const iconOpacity = translateX.interpolate({
+    inputRange: [0, SWIPE_REPLY_TRIGGER],
+    outputRange: [0, 1],
+    extrapolate: 'clamp',
+  });
+
+  const panResponder = useRef(
+    PanResponder.create({
+      // Only claims the gesture once it's clearly a rightward drag, not a tap or a vertical
+      // scroll — anything else is left alone, so the surrounding FlatList keeps scrolling
+      // normally and a plain tap/long-press still reaches the Pressable below untouched.
+      onMoveShouldSetPanResponder: (_evt, gesture) =>
+        gesture.dx > 6 && Math.abs(gesture.dx) > Math.abs(gesture.dy) * 1.5,
+      onPanResponderMove: (_evt, gesture) => {
+        translateX.setValue(Math.max(0, Math.min(gesture.dx, SWIPE_REPLY_MAX)));
+      },
+      onPanResponderRelease: (_evt, gesture) => {
+        Animated.spring(translateX, { toValue: 0, useNativeDriver: true, bounciness: 6 }).start();
+        if (gesture.dx > SWIPE_REPLY_TRIGGER) onSwipeReply();
+      },
+      onPanResponderTerminate: () => {
+        Animated.spring(translateX, { toValue: 0, useNativeDriver: true, bounciness: 6 }).start();
+      },
+    }),
+  ).current;
+
   return (
-    <Pressable
-      onLongPress={onLongPress}
-      style={[styles.bubbleRow, isMine ? styles.bubbleRowMine : styles.bubbleRowTheirs]}
-    >
-      <View style={[styles.bubble, isMine ? styles.bubbleMine : styles.bubbleTheirs]}>
-        {message.replyTo && (
-          <View style={[styles.quoteBlock, isMine && styles.quoteBlockMine]}>
-            <Text style={[styles.quoteLabel, isMine && styles.quoteTextMine]} numberOfLines={1}>
-              {resolveSenderLabel(message.replyTo.senderId)}
-            </Text>
-            <Text style={[styles.quoteBody, isMine && styles.quoteTextMine]} numberOfLines={1}>
-              {message.replyTo.body}
-            </Text>
+    <View style={styles.swipeWrap} {...panResponder.panHandlers}>
+      <Animated.View style={[styles.swipeReplyIcon, { opacity: iconOpacity }]}>
+        <Ionicons name="arrow-undo" size={18} color={colors.primary} />
+      </Animated.View>
+      <Animated.View style={{ transform: [{ translateX }] }}>
+        <Pressable
+          onLongPress={onLongPress}
+          style={[styles.bubbleRow, isMine ? styles.bubbleRowMine : styles.bubbleRowTheirs]}
+        >
+          <View style={[styles.bubble, isMine ? styles.bubbleMine : styles.bubbleTheirs]}>
+            {message.replyTo && (
+              <View style={[styles.quoteBlock, isMine && styles.quoteBlockMine]}>
+                <Text style={[styles.quoteLabel, isMine && styles.quoteLabelMine]} numberOfLines={1}>
+                  {resolveSenderLabel(message.replyTo.senderId)}
+                </Text>
+                <Text style={[styles.quoteBody, isMine && styles.quoteBodyMine]} numberOfLines={1}>
+                  {message.replyTo.body}
+                </Text>
+              </View>
+            )}
+            <Text style={[styles.bubbleText, isMine && styles.bubbleTextMine]}>{message.body}</Text>
           </View>
-        )}
-        <Text style={[styles.bubbleText, isMine && styles.bubbleTextMine]}>{message.body}</Text>
-      </View>
-      <Text style={styles.bubbleTime}>{time}</Text>
-    </Pressable>
+          <Text style={styles.bubbleTime}>{time}</Text>
+        </Pressable>
+      </Animated.View>
+    </View>
   );
 }
 
@@ -347,6 +393,8 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     textAlign: 'center',
   },
+  swipeWrap: { position: 'relative' },
+  swipeReplyIcon: { position: 'absolute', left: 8, top: '50%', marginTop: -9 },
   bubbleRow: { marginBottom: spacing.sm, maxWidth: '80%' },
   bubbleRowMine: { alignSelf: 'flex-end', alignItems: 'flex-end' },
   bubbleRowTheirs: { alignSelf: 'flex-start', alignItems: 'flex-start' },
@@ -362,10 +410,14 @@ const styles = StyleSheet.create({
     paddingLeft: spacing.sm,
     marginBottom: spacing.xs,
   },
-  quoteBlockMine: { borderLeftColor: 'rgba(255, 255, 255, 0.6)' },
+  // `primaryLight` rather than a plain white/grey tint — it's the same light blue already used
+  // elsewhere (the welcome screen's window-sky gradient), so a reply quote on a navy bubble reads
+  // as the app's own blue, not a washed-out, disconnected grey.
+  quoteBlockMine: { borderLeftColor: colors.primaryLight },
   quoteLabel: { ...typography.label, color: colors.primary },
   quoteBody: { ...typography.caption, color: colors.textSecondary },
-  quoteTextMine: { color: 'rgba(255, 255, 255, 0.75)' },
+  quoteLabelMine: { color: colors.primaryLight },
+  quoteBodyMine: { color: 'rgba(255, 255, 255, 0.75)' },
   blockedBar: {
     flexDirection: 'row',
     alignItems: 'center',

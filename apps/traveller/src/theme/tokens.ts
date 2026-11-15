@@ -1,8 +1,9 @@
 /**
  * Design tokens for the traveller app: a pastel-peach wash with navy-blue ink and accents.
  * `navy900` is the text-ink colour; `primary` is the one action colour for every interactive
- * surface app-wide — buttons, the active tab, links. Cards are solid white (`surface`) on the
- * soft peach `background`/`gradients.screen` wash, not translucent glass — see `Card`.
+ * surface app-wide — buttons, the active tab, links. Cards are a translucent, near-white frosted
+ * glass (`glassSurface`) over the peach `background`/`gradients.screen` wash, not solid white —
+ * see `Card`.
  */
 export const colors = {
   navy900: '#17365D',
@@ -42,15 +43,14 @@ export const colors = {
   warning: '#C98A1C',
   danger: '#C94B3F',
 
-  // Frosted-glass card surfaces, tinted peach rather than plain white so the background wash
-  // still reads through — see `Card`. `glassSurface` is the everyday card (list rows, match/deal
-  // cards — most of the app), opaque enough to keep dense text legible. `glassSurfaceStrong` is
-  // more transparent, for cards sitting over the bolder `welcomeSky` gradient, where a more
-  // opaque fill would look muddy against its richer colour. `glassBorder` is the same soft
-  // white rim for both — a hairline highlight, the way light catches real glass's edge.
-  glassSurface: 'rgba(255, 234, 219, 0.72)',
-  glassSurfaceStrong: 'rgba(255, 240, 229, 0.45)',
-  glassBorder: 'rgba(255, 255, 255, 0.55)',
+  // The one frosted-glass card surface — every `Card`, everywhere (list rows, match/deal cards,
+  // the welcome screen's pitch card). Near-white rather than strongly peach-tinted, and fairly
+  // opaque: a fill close in hue to the peach wash behind it (tried first) just blended into the
+  // background instead of reading as a card sitting above it — lightness contrast is what makes
+  // it pop, the translucency alone isn't enough. `glassBorder` is a crisper white hairline for
+  // the same reason, paired with `shadow.card` for lift.
+  glassSurface: 'rgba(255, 248, 242, 0.85)',
+  glassBorder: 'rgba(255, 255, 255, 0.8)',
 };
 
 export const gradients = {

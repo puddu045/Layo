@@ -2,22 +2,21 @@ import { StyleSheet, View, type ViewProps } from 'react-native';
 import { colors, radius, shadow, spacing } from '../theme/tokens';
 
 interface CardProps extends ViewProps {
-  /** 'solid' (default): the everyday opaque white panel used for match/deal cards etc.
-   * 'glass': translucent instead, so whatever's behind it (the welcome screen's gradient sky)
-   * shows through — for the handful of cards that sit over that gradient rather than the app's
-   * flat background wash. */
+  /** No visual difference any more — every card uses the same translucent glass surface now,
+   * on every background it sits over (see `colors.glassSurface`). Kept as a prop rather than
+   * removed outright so call sites that pass `variant="glass"` don't need to change too. */
   variant?: 'solid' | 'glass';
 }
 
 /**
- * The default surface for everything from match cards to deal cards: a translucent, peach-
- * tinted glass panel over the app's background wash (see `colors.glassSurface`), with a soft
+ * The default surface for everything from match cards to deal cards: a translucent, near-white
+ * frosted glass panel over the app's background wash (see `colors.glassSurface`), with a crisp
  * white hairline rim and a subtle shadow for lift — not solid white, so the wash behind it still
- * shows through.
+ * shows through, but light enough to still read clearly as a card sitting above it.
  */
-export function Card({ style, children, variant = 'solid', ...rest }: CardProps) {
+export function Card({ style, children, variant: _variant, ...rest }: CardProps) {
   return (
-    <View style={[styles.card, variant === 'glass' && styles.cardGlass, style]} {...rest}>
+    <View style={[styles.card, style]} {...rest}>
       {children}
     </View>
   );
@@ -31,10 +30,5 @@ const styles = StyleSheet.create({
     borderColor: colors.glassBorder,
     padding: spacing.lg,
     ...shadow.card,
-  },
-  // Lighter/more transparent than the default — for cards sitting over the bolder `welcomeSky`
-  // gradient (the welcome screen), where `glassSurface`'s opacity would look muddy against it.
-  cardGlass: {
-    backgroundColor: colors.glassSurfaceStrong,
   },
 });
