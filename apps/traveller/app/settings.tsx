@@ -3,7 +3,7 @@ import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Swit
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { updatePhoneRequestSchema, updateProfileRequestSchema } from '@layo/contracts';
+import { resetPasswordRequestSchema, updatePhoneRequestSchema, updateProfileRequestSchema } from '@layo/contracts';
 import { ScreenContainer } from '../src/components/ScreenContainer';
 import { Avatar } from '../src/components/Avatar';
 import { AvatarCropModal } from '../src/components/AvatarCropModal';
@@ -19,7 +19,7 @@ import { ApiError } from '../src/lib/api-client';
 import { colors, radius, spacing, typography } from '../src/theme/tokens';
 
 export default function Settings() {
-  const { signOut, session } = useAuth();
+  const { signOut, session, changePassword } = useAuth();
   const profile = useOwnProfile();
   const updateProfile = useUpdateProfile();
   const updatePhone = useUpdatePhone();
@@ -40,6 +40,13 @@ export default function Settings() {
   const [phone, setPhone] = useState('');
   const [phoneError, setPhoneError] = useState<string | undefined>();
   const [phoneSaved, setPhoneSaved] = useState(false);
+
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [passwordError, setPasswordError] = useState<string | undefined>();
+  const [passwordSaved, setPasswordSaved] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
 
   useEffect(() => {
     if (profile.data) {
@@ -103,6 +110,36 @@ export default function Settings() {
       setPhoneSaved(true);
     } catch (err) {
       setPhoneError(err instanceof ApiError ? err.message : 'Could not save your phone number');
+    }
+  };
+
+  const onChangePassword = async () => {
+    setPasswordError(undefined);
+    setPasswordSaved(false);
+    if (newPassword !== confirmNewPassword) {
+      setPasswordError('New passwords do not match');
+      return;
+    }
+    const parsed = resetPasswordRequestSchema.safeParse({ password: newPassword });
+    if (!parsed.success) {
+      setPasswordError(parsed.error.issues[0]?.message ?? 'Invalid password');
+      return;
+    }
+    if (!currentPassword) {
+      setPasswordError('Enter your current password');
+      return;
+    }
+    setChangingPassword(true);
+    try {
+      await changePassword(currentPassword, parsed.data.password);
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmNewPassword('');
+      setPasswordSaved(true);
+    } catch (err) {
+      setPasswordError(err instanceof Error ? err.message : 'Could not change your password');
+    } finally {
+      setChangingPassword(false);
     }
   };
 
@@ -186,6 +223,29 @@ export default function Settings() {
           {phoneError ? <Text style={styles.error}>{phoneError}</Text> : null}
           {phoneSaved ? <Text style={styles.saved}>Saved!</Text> : null}
           <Button label="Save phone number" variant="secondary" onPress={onSavePhone} loading={updatePhone.isPending} />
+
+          <Text style={styles.subsectionTitle}>Change password</Text>
+          <TextField
+            label="Current password"
+            secureTextEntry
+            value={currentPassword}
+            onChangeText={setCurrentPassword}
+          />
+          <TextField label="New password" secureTextEntry value={newPassword} onChangeText={setNewPassword} />
+          <TextField
+            label="Confirm new password"
+            secureTextEntry
+            value={confirmNewPassword}
+            onChangeText={setConfirmNewPassword}
+          />
+          {passwordError ? <Text style={styles.error}>{passwordError}</Text> : null}
+          {passwordSaved ? <Text style={styles.saved}>Password changed!</Text> : null}
+          <Button
+            label="Change password"
+            variant="secondary"
+            onPress={onChangePassword}
+            loading={changingPassword}
+          />
 
           <View style={styles.divider} />
 
@@ -272,6 +332,13 @@ const styles = StyleSheet.create({
   },
   avatarHint: { ...typography.caption, color: colors.textSecondary, marginTop: spacing.sm },
   sectionTitle: { ...typography.subtitle, color: colors.textPrimary, marginBottom: spacing.sm },
+  subsectionTitle: {
+    ...typography.body,
+    fontWeight: '600',
+    color: colors.textPrimary,
+    marginTop: spacing.lg,
+    marginBottom: spacing.sm,
+  },
   accountRow: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -39,6 +39,12 @@ interface AuthContextValue {
   requestPasswordReset: (email: string) => Promise<void>;
   /** Only valid once a recovery deep link has called `setSession` — see `auth/reset-password.tsx`. */
   updatePassword: (newPassword: string) => Promise<void>;
+  /** For the "change password" form in Settings, where the user is already signed in. Unlike
+   * `updatePassword` above, this re-verifies `currentPassword` first — the active session alone
+   * proves who's signed in, not that whoever's holding the unlocked phone right now knows the
+   * account's password, so changing it with no check at all would let someone silently lock the
+   * real owner out. */
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -122,6 +128,14 @@ export function AuthProvider({ children }: PropsWithChildren) {
         if (error) throw error;
       },
       updatePassword: async (newPassword) => {
+        const { error } = await supabase.auth.updateUser({ password: newPassword });
+        if (error) throw error;
+      },
+      changePassword: async (currentPassword, newPassword) => {
+        const email = session?.user.email;
+        if (!email) throw new Error('Not signed in');
+        const { error: signInError } = await supabase.auth.signInWithPassword({ email, password: currentPassword });
+        if (signInError) throw new Error('Current password is incorrect');
         const { error } = await supabase.auth.updateUser({ password: newPassword });
         if (error) throw error;
       },
