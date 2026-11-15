@@ -400,8 +400,12 @@ const styles = StyleSheet.create({
   bubbleRowMine: { alignSelf: 'flex-end', alignItems: 'flex-end' },
   bubbleRowTheirs: { alignSelf: 'flex-start', alignItems: 'flex-start' },
   bubble: { borderRadius: radius.lg, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
+  // Solid, not glass — `primary` (the same blue used everywhere else in the app, unlike navy900)
+  // only reads as translucent at an opacity low enough to drop white message text below
+  // readable contrast against it. Tried several opacities; none both looked glassy and stayed
+  // legible, so this stays opaque rather than trading one for the other.
   bubbleMine: {
-    backgroundColor: colors.glassSurfaceBlue,
+    backgroundColor: colors.primary,
     borderWidth: 1,
     borderColor: colors.glassBorder,
     borderBottomRightRadius: radius.sm,

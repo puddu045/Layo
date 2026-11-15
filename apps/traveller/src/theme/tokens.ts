@@ -51,14 +51,6 @@ export const colors = {
   // the same reason, paired with `shadow.card` for lift.
   glassSurface: 'rgba(255, 248, 242, 0.85)',
   glassBorder: 'rgba(255, 255, 255, 0.8)',
-  // The sender's own chat bubble — translucent `navy900` rather than the old flat opaque fill
-  // of the same colour, so it visibly lightens over the peach wash behind it instead of looking
-  // solid. Tried `primary` (the brighter blue) first: it only reads as glass at an opacity low
-  // enough that white message text drops below readable contrast against it — `primary` is
-  // already fairly light/saturated, so blending in enough background to look translucent washes
-  // it out fast. `navy900` starts dark enough that the same visible lightening leaves plenty of
-  // contrast to spare (still ~5:1 against white at this opacity, across the gradient).
-  glassSurfaceBlue: 'rgba(23, 54, 93, 0.72)',
 };
 
 export const gradients = {
