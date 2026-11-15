@@ -5,6 +5,10 @@ import { PrismaService } from '../common/prisma/prisma.service';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
 
 const EXPO_PUSH_API_URL = 'https://exp.host/--/api/v2/push/send';
+// Caps how many individual message previews a bumped notification keeps — unbounded growth here
+// would bloat the FCM data payload (there's a hard ~4KB limit on it) for a conversation nobody's
+// opened in a while. The oldest previews fall off first; `count` still tracks the true total.
+const MAX_PREVIEWS = 5;
 
 @Injectable()
 export class NotificationsService {
@@ -38,9 +42,11 @@ export class NotificationsService {
   /** Used by `MessagingService` for every new message — rather than `create()`, which would
    * leave one separate unread row per message (10 messages in a row from the same person showed
    * up as 10 separate notifications). If an unread `MESSAGE_NEW` for this exact connection
-   * already exists, this bumps it in place (new preview, incremented count, `createdAt` reset so
-   * it resurfaces at the top) instead of inserting another row — one notification per
-   * conversation with unread messages, not one per message.
+   * already exists, this bumps it in place — appends to the kept previews (capped at
+   * `MAX_PREVIEWS`, oldest dropped first), increments `count`, resets `createdAt` so it
+   * resurfaces at the top — instead of inserting another row. `count` is the true total even
+   * once `previews` has capped out, so "12 new messages" stays accurate even though only the
+   * last 5 bodies are kept.
    *
    * Pushes on *every* message, not just the first unread one — see `sendExpoPush`'s own comment
    * for why that's now safe to do without flooding the Android tray. */
@@ -55,18 +61,20 @@ export class NotificationsService {
       where: { userId, type: 'MESSAGE_NEW', readAt: null, payload: { path: ['connectionId'], equals: connectionId } },
     });
 
-    const count = (Number((existing?.payload as Record<string, unknown>)?.count) || 1) + (existing ? 1 : 0);
+    const existingPayload = existing?.payload as Record<string, unknown> | undefined;
+    const count = (Number(existingPayload?.count) || 1) + (existing ? 1 : 0);
+    const previews = [
+      ...(Array.isArray(existingPayload?.previews) ? (existingPayload.previews as string[]) : []),
+      preview,
+    ].slice(-MAX_PREVIEWS);
+
+    const payload = { connectionId, fromUserId, fromUserDisplayName, preview, previews, count };
     const row = existing
-      ? await this.prisma.client.notification.update({
-          where: { id: existing.id },
-          data: { createdAt: new Date(), payload: { connectionId, fromUserId, fromUserDisplayName, preview, count } },
-        })
-      : await this.prisma.client.notification.create({
-          data: { userId, type: 'MESSAGE_NEW', payload: { connectionId, fromUserId, fromUserDisplayName, preview, count } },
-        });
+      ? await this.prisma.client.notification.update({ where: { id: existing.id }, data: { createdAt: new Date(), payload } })
+      : await this.prisma.client.notification.create({ data: { userId, type: 'MESSAGE_NEW', payload } });
 
     this.gateway.emitToUser(userId, socketEvents.NOTIFICATION_NEW, this.toNotification(row));
-    await this.sendExpoPush(userId, { connectionId, type: 'MESSAGE_NEW', senderName: fromUserDisplayName, preview, count });
+    await this.sendExpoPush(userId, { connectionId, type: 'MESSAGE_NEW', senderName: fromUserDisplayName, previews, count });
   }
 
   async list(userId: string, query: ListNotificationsQuery): Promise<NotificationPage> {

@@ -57,14 +57,20 @@ function describe(n: Notification): { title: string; body: string; onPress?: () 
     }
     case 'MESSAGE_NEW': {
       const connectionId = String(n.payload.connectionId ?? '');
-      const preview = n.payload.preview ? String(n.payload.preview) : undefined;
+      const senderName = n.payload.fromUserDisplayName ? String(n.payload.fromUserDisplayName) : 'Someone';
+      const previews = Array.isArray(n.payload.previews)
+        ? n.payload.previews.filter((p): p is string => typeof p === 'string')
+        : n.payload.preview
+          ? [String(n.payload.preview)]
+          : [];
       const count = Number(n.payload.count) || 1;
       return {
         // Several messages from the same conversation bump one notification in place (see
         // `NotificationsService.createOrBumpMessageNotification`) rather than piling up a
-        // separate row per message — this just reflects that count back once there's more than one.
-        title: count > 1 ? `${count} new messages` : 'New message',
-        body: preview ?? 'You have a new message.',
+        // separate row per message — title reflects the count, body shows every kept message
+        // (newest last), not just the one that most recently bumped it.
+        title: count > 1 ? `${senderName} (${count} new messages)` : senderName,
+        body: previews.length > 0 ? previews.join('\n') : 'You have a new message.',
         onPress: connectionId ? () => router.push(`/chat/${connectionId}`) : undefined,
       };
     }

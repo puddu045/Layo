@@ -18,7 +18,6 @@ import { Button } from '../../src/components/Button';
 import { Card } from '../../src/components/Card';
 import {
   colors,
-  fonts,
   gradients,
   radius,
   shadow,
@@ -105,18 +104,24 @@ function HeroArt({ iconTranslate }: { iconTranslate: ReturnType<typeof getIconTr
   );
 }
 
-/** The "Layo" wordmark with a small coral heart accent tucked over the top-right — a
- * hand-lettered logotype look rather than a plain styled label. No separate underline: Pacifico's
- * own "y" already swings into a long tail/flourish, and a straight bar near it (tried at several
- * positions) either overlapped the tagline below, merged invisibly into the glyph itself, or cut
- * across that tail in a way that read as the logo being clipped rather than underlined — not
- * worth it on top of a font that already has a flourish like this. */
+/** The "Layo" wordmark with its small coral heart accent, pre-rendered to a single image
+ * (`layo-wordmark.png`, generated from this exact Pacifico file + the same Ionicons glyph used
+ * elsewhere — see the generation script) rather than live Text + an icon.
+ *
+ * This replaced a live-text version after its tail swash and the heart kept clipping on native
+ * even with generous padding — script fonts' loops and descenders overshoot a typical sans
+ * font's em-box on every side, and native text rendering enforces that box far more strictly than
+ * react-native-web does for the same font, so "fine on web" was never proof it had enough room on
+ * native. A plain image has no font-metric box to clip against on any platform — what you see
+ * here is pixel-identical everywhere this renders. */
 function Wordmark() {
   return (
-    <View style={styles.wordmarkWrap}>
-      <Text style={styles.title}>{BRAND.name}</Text>
-      <Ionicons name="heart-outline" size={22} color={colors.coral} style={styles.wordmarkHeart} />
-    </View>
+    <Image
+      source={require('../../assets/images/layo-wordmark.png')}
+      style={styles.wordmarkImage}
+      resizeMode="contain"
+      accessibilityLabel={BRAND.name}
+    />
   );
 }
 
@@ -440,40 +445,10 @@ const styles = StyleSheet.create({
     left: -22,
     opacity: 0.6,
   },
-  // Wraps the wordmark text so the heart can be positioned relative to it rather than to the
-  // whole hero block.
-  wordmarkWrap: { alignItems: 'center' },
-  // Script fonts' loops and descenders overshoot a typical sans font's em-box on every side, not
-  // just top/bottom — generous line height and horizontal padding keep those strokes from
-  // clipping against the text's measured box, which native text rendering enforces more strictly
-  // than a web browser does for the same font. Pacifico's flourishes (the long "y" tail
-  // especially) are notably larger than either font this wordmark used before it, hence the
-  // generous padding here rather than the tighter values those needed.
-  title: {
-    fontFamily: fonts.wordmark,
-    fontSize: 60,
-    // Both bumped further still — the padding below was already sized generously for native's
-    // stricter clipping (see this style's own comment), but on an actual device the tail swash
-    // was still getting cut at the bottom-left, and the heart (positioned relative to this box,
-    // see wordmarkHeart below) was riding too high. react-native-web's text layout appears to be
-    // the most forgiving of the three renderers (web/iOS/Android) this font's overshoot has to
-    // clear, so "looked fine on web" wasn't proof it had enough room on native.
-    lineHeight: 100,
-    paddingVertical: spacing.md,
-    // Horizontal, not just paddingLeft, so the box stays symmetric and the text doesn't visibly
-    // shift off-centre under the window above it.
-    paddingHorizontal: spacing.xl,
-    color: colors.primaryDark,
-  },
-  // Tucked over the top-right of the "o", tilted like a quick hand-drawn flourish rather than a
-  // neatly placed icon. Offset down to match `title`'s increased paddingVertical above — this is
-  // positioned relative to the padded box, not the glyphs themselves, so it has to move with it.
-  wordmarkHeart: {
-    position: 'absolute',
-    top: 24,
-    right: 24,
-    transform: [{ rotate: '18deg' }],
-  },
+  // Fixed aspect ratio matching the generated PNG (1065×669) — an explicit width/height, not just
+  // resizeMode="contain" on an unsized box, so layout (including the hidden measurement copies
+  // below) has a real size to work with before the image itself has necessarily loaded.
+  wordmarkImage: { width: 176, height: 176 / (1065 / 669) },
   tagline: {
     ...typography.body,
     color: colors.textSecondary,

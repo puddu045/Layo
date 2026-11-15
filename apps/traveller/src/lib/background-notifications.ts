@@ -39,7 +39,14 @@ TaskManager.defineTask<Notifications.NotificationTaskPayload>(BACKGROUND_NOTIFIC
 
   const count = Number(payload.count) || 1;
   const senderName = typeof payload.senderName === 'string' ? payload.senderName : 'Someone';
-  const preview = typeof payload.preview === 'string' ? payload.preview : 'Sent you a message';
+  const previews = Array.isArray(payload.previews)
+    ? payload.previews.filter((p): p is string => typeof p === 'string')
+    : [];
+  // Joined with newlines, not space-separated or just the latest one — Android's notification
+  // view applies BigTextStyle to a multi-line body by default, so pulling the notification down
+  // shows every kept message instead of only the one that happened to trigger this particular
+  // replace.
+  const body = previews.length > 0 ? previews.join('\n') : 'Sent you a message';
 
   await Notifications.scheduleNotificationAsync({
     // Same identifier every time for this conversation — the replace, not the content, is the
@@ -47,7 +54,7 @@ TaskManager.defineTask<Notifications.NotificationTaskPayload>(BACKGROUND_NOTIFIC
     identifier: `message-${payload.connectionId}`,
     content: {
       title: count > 1 ? `${senderName} (${count} new messages)` : senderName,
-      body: preview,
+      body,
       data: { connectionId: payload.connectionId },
       sound: 'default',
       ...(Platform.OS === 'android' ? { channelId: 'default' } : {}),
