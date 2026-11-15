@@ -19,7 +19,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#2878C7"
+        "backgroundColor": "#FFE8DA"
       },
       "package": "com.layo.traveller",
       "softwareKeyboardLayoutMode": "pan",
