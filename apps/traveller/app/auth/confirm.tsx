@@ -1,26 +1,21 @@
 import { useEffect, useState } from 'react';
 import { router } from 'expo-router';
 import * as Linking from 'expo-linking';
-import { supabase } from '../../src/lib/supabase';
 import { ScreenContainer } from '../../src/components/ScreenContainer';
 import { ErrorState, LoadingState } from '../../src/components/StateViews';
+import { notifyInfo } from '../../src/lib/notify';
 
-interface ParsedConfirmUrl {
-  accessToken?: string;
-  refreshToken?: string;
-  errorDescription?: string;
-}
-
-// Supabase's confirmation redirect appends the session (or an error) after a `#`, not as normal
-// query params — same shape as its web implicit flow, just landing on this deep link instead of
-// a browser. `expo-linking`'s own parser only looks at the path/query, so the fragment is pulled
-// out and read manually here.
-function parseConfirmUrl(url: string): ParsedConfirmUrl {
+// Supabase's confirmation redirect appends the result (a session, or an error) after a `#`, not
+// as normal query params — same shape as its web implicit flow, just landing on this deep link
+// instead of a browser. `expo-linking`'s own parser only looks at the path/query, so the
+// fragment is pulled out and read manually here.
+function parseConfirmUrl(url: string): { confirmed: boolean; errorDescription?: string } {
   const hash = url.includes('#') ? url.slice(url.indexOf('#') + 1) : '';
   const params = new URLSearchParams(hash);
   return {
-    accessToken: params.get('access_token') ?? undefined,
-    refreshToken: params.get('refresh_token') ?? undefined,
+    // Supabase only ever puts an access_token here once it's actually verified the link —
+    // that's all this screen needs it for, so the token itself is never used.
+    confirmed: params.has('access_token'),
     errorDescription: params.get('error_description') ?? undefined,
   };
 }
@@ -30,6 +25,10 @@ function parseConfirmUrl(url: string): ParsedConfirmUrl {
  * native (see `auth-context.tsx`'s `EMAIL_CONFIRM_REDIRECT`). `Linking.useURL()` — rather than
  * `getInitialURL()` alone — covers both a cold start (app wasn't running) and a warm one (app
  * already open in the background when the link is tapped).
+ *
+ * Deliberately doesn't sign the user in with the tokens Supabase hands back — confirming an
+ * email is a one-time action, not an implicit login, so this always lands back on the login
+ * screen and lets them sign in themselves.
  */
 export default function ConfirmEmail() {
   const url = Linking.useURL();
@@ -38,34 +37,21 @@ export default function ConfirmEmail() {
   useEffect(() => {
     if (!url) return;
 
-    (async () => {
-      const { accessToken, refreshToken, errorDescription } = parseConfirmUrl(url);
-
-      if (errorDescription) {
-        setError(decodeURIComponent(errorDescription.replace(/\+/g, ' ')));
-        return;
-      }
-      if (!accessToken || !refreshToken) {
-        router.replace('/');
-        return;
-      }
-
-      const { error: sessionError } = await supabase.auth.setSession({
-        access_token: accessToken,
-        refresh_token: refreshToken,
-      });
-      if (sessionError) {
-        setError(sessionError.message);
-        return;
-      }
-      router.replace('/');
-    })();
+    const { confirmed, errorDescription } = parseConfirmUrl(url);
+    if (errorDescription) {
+      setError(decodeURIComponent(errorDescription.replace(/\+/g, ' ')));
+      return;
+    }
+    if (confirmed) {
+      notifyInfo('Email confirmed', 'You can now sign in.');
+    }
+    router.replace('/(auth)/login');
   }, [url]);
 
   if (error) {
     return (
       <ScreenContainer>
-        <ErrorState message={error} onRetry={() => router.replace('/(auth)/welcome')} />
+        <ErrorState message={error} onRetry={() => router.replace('/(auth)/login')} />
       </ScreenContainer>
     );
   }
