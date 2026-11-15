@@ -199,7 +199,13 @@ export class NotificationsService {
   private async sendExpoPush(userId: string, data: Record<string, unknown>): Promise<void> {
     try {
       const tokens = await this.prisma.client.pushToken.findMany({ where: { userId }, select: { token: true } });
-      if (tokens.length === 0) return;
+      if (tokens.length === 0) {
+        // Logged unconditionally, not just on failure — this and the two log lines below are the
+        // only way to tell "never even tried" apart from "tried and it actually worked", since a
+        // fully successful send previously produced no log output at all.
+        this.logger.log(`No push token on file for user ${userId} — nothing to send.`);
+        return;
+      }
 
       const response = await fetch(EXPO_PUSH_API_URL, {
         method: 'POST',
@@ -216,11 +222,14 @@ export class NotificationsService {
       // silent `DeviceNotRegistered` ticket (stale token - old install, cleared data, etc.) is
       // exactly the kind of failure that looks identical to "nothing happened" from every other
       // signal available here, so this is read and logged instead of only checking `response.ok`.
-      const body = (await response.json()) as { data?: { status: string; message?: string; details?: { error?: string } }[] };
+      const body = (await response.json()) as { data?: { status: string; id?: string; message?: string; details?: { error?: string } }[] };
       const tickets = body.data ?? [];
       const staleTokens: string[] = [];
       tickets.forEach((ticket, i) => {
-        if (ticket.status !== 'error') return;
+        if (ticket.status !== 'error') {
+          this.logger.log(`Expo accepted push for user ${userId} (token ${i + 1}/${tokens.length}), ticket id ${ticket.id}.`);
+          return;
+        }
         this.logger.warn(`Expo push ticket error for user ${userId}: ${ticket.details?.error ?? ticket.message}`);
         if (ticket.details?.error === 'DeviceNotRegistered') {
           const token = tokens[i]?.token;

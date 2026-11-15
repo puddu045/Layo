@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable, Logger } from '@nestjs/common';
 import type { ListMessagesQuery, Message, PaginatedResponse, SendMessageRequest } from '@layo/contracts';
 import { socketEvents } from '@layo/contracts';
 import { PrismaService } from '../common/prisma/prisma.service';
@@ -9,6 +9,8 @@ import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class MessagingService {
+  private readonly logger = new Logger(MessagingService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly connectionsService: ConnectionsService,
@@ -77,6 +79,15 @@ export class MessagingService {
     // arrives, so a notification for it would be redundant. Any *other* conversation still
     // notifies normally, since this check is scoped to this one connectionId.
     const recipientIsActive = await this.gateway.isUserActiveInChat(otherUserId, connectionId);
+    // Logged unconditionally (not just on error) — a push that's silently skipped because the
+    // recipient's socket still looks "active" in this chat (e.g. the app was only backgrounded,
+    // not fully killed or navigated away, so nothing ever told the server to leave the room) was
+    // indistinguishable from a push that was sent and simply never displayed, with nothing in the
+    // logs either way.
+    this.logger.log(
+      `Message in connection ${connectionId}: recipient ${otherUserId} active-in-chat=${recipientIsActive}` +
+        (recipientIsActive ? ' — notification skipped' : ' — sending notification/push'),
+    );
     if (!recipientIsActive) {
       const senderProfile = await this.prisma.client.profile.findUnique({
         where: { userId },
