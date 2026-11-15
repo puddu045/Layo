@@ -60,20 +60,23 @@ export class AeroDataBoxFlightProvider implements IFlightProvider {
     for (const window of windows) {
       try {
         await this.reserveOrThrow(env.AERODATABOX_UNITS_PER_CALL);
+        const url =
+          `${env.AERODATABOX_BASE_URL}/flights/airports/Iata/${encodeURIComponent(departureAirportIata)}` +
+          `/${window.fromLocal}/${window.toLocal}` +
+          `?direction=Departure&withLeg=true&withCancelled=false&withCargo=false&withPrivate=false`;
+        const body = await this.request<AeroDataBoxAirportFidsResponse>(url, env);
+        rawFlights.push(...(body?.departures ?? []));
       } catch (err) {
-        if (err instanceof AeroDataBoxQuotaExceededError) {
-          this.logger.warn(`Stopped mid-search: ${err.message}`);
+        // `reserveOrThrow` re-throws a quota refusal as `FlightProviderUnavailableError` (see its
+        // own comment), so this one check also covers the quota-exhausted-mid-search case, not
+        // just an HTTP failure — either way, whatever the other window already found is still
+        // worth returning rather than discarding the whole search over one failed half-day.
+        if (err instanceof FlightProviderUnavailableError) {
+          this.logger.warn(`Stopped mid-search for ${departureAirportIata}/${date}: ${err.message}`);
           break;
         }
         throw err;
       }
-
-      const url =
-        `${env.AERODATABOX_BASE_URL}/flights/airports/Iata/${encodeURIComponent(departureAirportIata)}` +
-        `/${window.fromLocal}/${window.toLocal}` +
-        `?direction=Departure&withLeg=true&withCancelled=false&withCargo=false&withPrivate=false`;
-      const body = await this.request<AeroDataBoxAirportFidsResponse>(url, env);
-      rawFlights.push(...(body?.departures ?? []));
     }
 
     const parsed = rawFlights
@@ -162,23 +165,18 @@ export class AeroDataBoxFlightProvider implements IFlightProvider {
 
   /** Same "create a reference row if we've never seen this airport before" approach as the
    * Aviationstack provider — but AeroDataBox actually gives us a real IANA timezone, so there's
-   * no need for its "default to UTC and let an admin fix it later" fallback. */
+   * no need for its "default to UTC and let an admin fix it later" fallback.
+   *
+   * `upsert`, not `findUnique` then `create`: `searchDepartures` can return dozens of records
+   * that share the same new destination airport, all resolved concurrently via `Promise.all` in
+   * `searchDepartures`/`lookup` above — two concurrent "doesn't exist yet" checks for the same
+   * airport would otherwise both proceed to `create`, and the second hits Postgres's unique
+   * constraint on `iataCode` and throws, crashing the whole request with a 500 instead of one of
+   * them just winning. `upsert` lets Postgres resolve that race atomically. */
   private async ensureAirport(leg: ParsedLeg): Promise<Airport> {
-    const existing = await this.prisma.client.airport.findUnique({ where: { iataCode: leg.iataCode } });
-    if (existing) {
-      return {
-        iataCode: existing.iataCode,
-        icaoCode: existing.icaoCode ?? undefined,
-        name: existing.name,
-        city: existing.city,
-        country: existing.country,
-        timezone: existing.timezone,
-        latitude: existing.latitude ?? undefined,
-        longitude: existing.longitude ?? undefined,
-      };
-    }
-    const created = await this.prisma.client.airport.create({
-      data: {
+    const airport = await this.prisma.client.airport.upsert({
+      where: { iataCode: leg.iataCode },
+      create: {
         iataCode: leg.iataCode,
         icaoCode: leg.icaoCode,
         name: leg.name,
@@ -188,26 +186,27 @@ export class AeroDataBoxFlightProvider implements IFlightProvider {
         latitude: leg.latitude,
         longitude: leg.longitude,
       },
+      update: {},
     });
-    this.logger.log(`Auto-created airport reference row for ${leg.iataCode} from AeroDataBox.`);
     return {
-      iataCode: created.iataCode,
-      icaoCode: created.icaoCode ?? undefined,
-      name: created.name,
-      city: created.city,
-      country: created.country,
-      timezone: created.timezone,
-      latitude: created.latitude ?? undefined,
-      longitude: created.longitude ?? undefined,
+      iataCode: airport.iataCode,
+      icaoCode: airport.icaoCode ?? undefined,
+      name: airport.name,
+      city: airport.city,
+      country: airport.country,
+      timezone: airport.timezone,
+      latitude: airport.latitude ?? undefined,
+      longitude: airport.longitude ?? undefined,
     };
   }
 
+  /** Same race-safety reasoning as `ensureAirport` above — `upsert`, not `findUnique`/`create`. */
   private async ensureAirline(airline: { iataCode?: string; icaoCode?: string; name: string }): Promise<Airline> {
     if (!airline.iataCode) return { iataCode: 'XX', name: airline.name };
-    const existing = await this.prisma.client.airline.findUnique({ where: { iataCode: airline.iataCode } });
-    if (existing) return { iataCode: existing.iataCode, icaoCode: existing.icaoCode ?? undefined, name: existing.name };
-    const created = await this.prisma.client.airline.create({
-      data: { iataCode: airline.iataCode, icaoCode: airline.icaoCode, name: airline.name },
+    const created = await this.prisma.client.airline.upsert({
+      where: { iataCode: airline.iataCode },
+      create: { iataCode: airline.iataCode, icaoCode: airline.icaoCode, name: airline.name },
+      update: {},
     });
     return { iataCode: created.iataCode, icaoCode: created.icaoCode ?? undefined, name: created.name };
   }
