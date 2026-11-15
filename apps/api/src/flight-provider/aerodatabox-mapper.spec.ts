@@ -68,6 +68,16 @@ describe('parseAeroDataBoxFlight', () => {
   it('drops a record missing a flight number', () => {
     expect(parseAeroDataBoxFlight(flightRecord({ number: undefined }), '2026-06-01')).toBeUndefined();
   });
+
+  it('strips the space AeroDataBox puts between the airline code and the number', () => {
+    // Confirmed against a real search: AeroDataBox returns e.g. "BA 123", but every other flight
+    // number in this app (fixtures, Aviationstack, manual entry, and `flightNumberSchema`'s own
+    // regex) is the compact "BA123" form — the un-normalized space made journey creation fail
+    // with an opaque "Validation failed" once a real candidate reached that schema.
+    const parsed = parseAeroDataBoxFlight(flightRecord({ number: 'BA 123' }), '2026-06-01')!;
+    expect(parsed.flightNumber).toBe('BA123');
+    expect(parsed.providerRef).toBe('aerodatabox:BA123:2026-06-01');
+  });
 });
 
 describe('mapAeroDataBoxStatus', () => {

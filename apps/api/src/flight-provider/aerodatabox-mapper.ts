@@ -131,13 +131,20 @@ export function parseAeroDataBoxFlight(
   const arrival = parseLeg(raw.arrival);
   if (!departure || !arrival) return undefined;
 
+  // AeroDataBox renders this with a space between the airline code and the number (e.g.
+  // "BA 123") — every other flight number in this app (fixtures, Aviationstack, manual entry,
+  // and `flightNumberSchema`'s own validation) is the compact "BA123" form with no space, so
+  // this is normalized once here rather than letting the space reach contracts validation and
+  // fail with an opaque "Validation failed" at journey-creation time.
+  const flightNumber = raw.number.replace(/\s+/g, '').toUpperCase();
+
   return {
     // Deterministic from (flight number, requested local date) alone, not tied to which endpoint
     // or search produced this record — so a flight surfaced by an airport-schedule search can
     // later be re-verified by `FlightsService.resolveConfirmedCandidate` via a fresh by-number
     // lookup and still match on `providerRef`, exactly like the mock/Aviationstack providers.
-    providerRef: `aerodatabox:${raw.number}:${requestedDate}`,
-    flightNumber: raw.number,
+    providerRef: `aerodatabox:${flightNumber}:${requestedDate}`,
+    flightNumber,
     isCodeshare: raw.codeshareStatus === 'IsCodeshare',
     status: mapAeroDataBoxStatus(raw.status),
     airline: { iataCode: raw.airline?.iata, icaoCode: raw.airline?.icao, name: raw.airline?.name ?? raw.number },
