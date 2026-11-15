@@ -226,8 +226,13 @@ export class NotificationsService {
       // silent `DeviceNotRegistered` ticket (stale token - old install, cleared data, etc.) is
       // exactly the kind of failure that looks identical to "nothing happened" from every other
       // signal available here, so this is read and logged instead of only checking `response.ok`.
-      const body = (await response.json()) as { data?: { status: string; id?: string; message?: string; details?: { error?: string } }[] };
-      const tickets = body.data ?? [];
+      // Named `responseBody`, not `body` — this function also takes a `body` *parameter* (the
+      // push's own text), and a same-named `const` anywhere in this scope makes the whole
+      // function body treat `body` as uninitialized until this line runs, breaking the request
+      // actually sent above: confirmed in production as "Cannot access 'body' before
+      // initialization", silently failing every single push since the previous deploy.
+      const responseBody = (await response.json()) as { data?: { status: string; id?: string; message?: string; details?: { error?: string } }[] };
+      const tickets = responseBody.data ?? [];
       const staleTokens: string[] = [];
       tickets.forEach((ticket, i) => {
         if (ticket.status !== 'error') {
