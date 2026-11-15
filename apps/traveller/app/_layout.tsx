@@ -9,10 +9,6 @@ import { queryClient } from '../src/lib/query-client';
 import { AuthProvider, useAuth } from '../src/lib/auth-context';
 import { usePushNotifications } from '../src/hooks/push-notification-hooks';
 import { colors } from '../src/theme/tokens';
-// Side-effect only: defines the background notification task. Must be imported from a module
-// reached unconditionally when the JS bundle loads (see that file's own comment for why) — this
-// root layout is the right place, not a dependency of anything that could fail to run.
-import '../src/lib/background-notifications';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 

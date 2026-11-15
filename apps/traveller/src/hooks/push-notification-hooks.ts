@@ -6,7 +6,6 @@ import Constants from 'expo-constants';
 import { router } from 'expo-router';
 import { useAuth } from '../lib/auth-context';
 import { api } from '../lib/api-client';
-import { BACKGROUND_NOTIFICATION_TASK } from '../lib/background-notifications';
 
 // Without this, Android/iOS silently drop a notification that arrives while the app is in the
 // foreground — this app wants it shown even then, for whichever conversation *isn't* the one
@@ -30,14 +29,6 @@ Notifications.setNotificationHandler({
 export function usePushNotifications() {
   const { session } = useAuth();
   const registeredTokenRef = useRef<string | undefined>(undefined);
-
-  // Once per app launch, independent of sign-in state — this just tells the OS which task to
-  // run when a push arrives in the background/killed, so it should be ready before anything
-  // could possibly arrive, not gated behind the sign-in effect below.
-  useEffect(() => {
-    if (Platform.OS === 'web') return;
-    Notifications.registerTaskAsync(BACKGROUND_NOTIFICATION_TASK).catch(() => {});
-  }, []);
 
   useEffect(() => {
     // No device push on web, and simulators/emulators can't receive real push either.

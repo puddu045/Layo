@@ -74,7 +74,19 @@ export class NotificationsService {
       : await this.prisma.client.notification.create({ data: { userId, type: 'MESSAGE_NEW', payload } });
 
     this.gateway.emitToUser(userId, socketEvents.NOTIFICATION_NEW, this.toNotification(row));
-    await this.sendExpoPush(userId, { connectionId, type: 'MESSAGE_NEW', senderName: fromUserDisplayName, previews, count });
+
+    const title = count > 1 ? `${fromUserDisplayName} (${count} new messages)` : fromUserDisplayName;
+    await this.sendExpoPush(userId, {
+      // Expo's Android implementation reads these three keys directly out of a data-only
+      // message's `data` map to build a real system notification (see `sendExpoPush`'s comment
+      // for the exact source) — title/message/tag, not the push API's own top-level fields.
+      title,
+      message: previews.join('\n'),
+      tag: `message-${connectionId}`,
+      channelId: 'default',
+      connectionId,
+      type: 'MESSAGE_NEW',
+    });
   }
 
   async list(userId: string, query: ListNotificationsQuery): Promise<NotificationPage> {
@@ -137,16 +149,19 @@ export class NotificationsService {
    * this was asked for. A delivery failure (bad/expired token, Expo's service down) never fails
    * the request that triggered it — the in-app notification already succeeded regardless.
    *
-   * Deliberately sends *no* `title`/`body` at the top level — everything the client needs to
-   * show (and update) a notification travels in `data` instead. Expo's push API doesn't expose
-   * Android's native notification-tag/replace mechanism, so a push built with top-level
-   * title/body gets auto-displayed by the OS with a new, unrelated tray entry every time —
-   * exactly the "ten messages, ten notifications" bug this replaced. The client's background
-   * task (`registerTaskAsync` in `push-notification-hooks.ts`) reads this `data` payload and
-   * calls `scheduleNotificationAsync` with an `identifier` derived from `connectionId`, so a
-   * second call for the same conversation *replaces* the first tray entry instead of stacking a
-   * new one — the actual fix, not just sending fewer pushes. `priority: 'high'` asks FCM to
-   * delay delivery as little as possible even while the device is in Doze. */
+   * Deliberately sends no top-level `title`/`body` on the push itself — this is a "data-only"
+   * FCM message, which matters because of how `expo-notifications`' own Android native code
+   * handles one (traced directly in `expo-notifications/android/.../RemoteNotificationContent.kt`
+   * + `NotificationData.kt`, since this isn't documented anywhere obvious): it still builds and
+   * displays a real system notification, reading `data.title` / `data.message` for the content
+   * and `data.tag` as the notification's native identifier — posting a second notification with
+   * the *same* tag replaces the first instead of stacking a new one, which is exactly the
+   * replace-in-place behaviour needed here, built into Android's own notification system rather
+   * than anything this app has to maintain. This path also runs through Google Play Services'
+   * own privileged delivery, independent of this app's JS ever executing — unlike an approach
+   * built on a client-side background task (tried first; didn't fire reliably once the app was
+   * actually killed, not just backgrounded), which needs the OS to wake the app's JS runtime
+   * first. `priority: 'high'` asks FCM to delay delivery as little as possible under Doze. */
   private async sendExpoPush(userId: string, data: Record<string, unknown>): Promise<void> {
     try {
       const tokens = await this.prisma.client.pushToken.findMany({ where: { userId }, select: { token: true } });
