@@ -50,10 +50,20 @@ function fakePrisma(): PrismaService {
   } as unknown as PrismaService;
 }
 
-function fakeProvider(impl: Partial<IFlightProvider>): IFlightProvider {
+/** Matches how the real providers split the two steps: `fetchDepartureSchedule` returns the
+ * opaque "schedule" (here, simply a `FlightCandidate[]`, same as the mock provider's own
+ * approach), and `resolveDeparturesForDestination` filters it — the database-touching part in
+ * the real providers, but these tests don't need a database, just the filtering behaviour. */
+function fakeProvider(impl: Partial<IFlightProvider> & { schedule?: () => Promise<FlightCandidate[]> }): IFlightProvider {
+  const { schedule, ...rest } = impl;
   return {
     lookup: async () => [],
-    ...impl,
+    ...(schedule && {
+      fetchDepartureSchedule: schedule,
+      resolveDeparturesForDestination: async (s: unknown, destinationAirportIata: string) =>
+        (s as FlightCandidate[]).filter((c) => c.arrivalAirport.iataCode === destinationAirportIata),
+    }),
+    ...rest,
   };
 }
 
@@ -72,7 +82,7 @@ describe('FlightScheduleService', () => {
   it('filters cached departures down to the requested destination', async () => {
     let calls = 0;
     const provider = fakeProvider({
-      searchDepartures: async () => {
+      schedule: async () => {
         calls++;
         return [
           candidate({ flightNumber: 'BA123', arrivalAirport: { iataCode: 'DXB', name: 'Dubai', city: 'Dubai', country: 'UAE', timezone: 'Asia/Dubai' } }),
@@ -87,8 +97,8 @@ describe('FlightScheduleService', () => {
     expect(toDubai.candidates[0]!.flightNumber).toBe('BA123');
     expect(toDubai.verified).toBe(true);
 
-    // A different destination, same airport+date: reuses the cached departures list instead of
-    // calling the provider again.
+    // A different destination, same airport+date: reuses the cached schedule instead of calling
+    // the provider's (expensive) fetch again.
     const toSingapore = await service.search({ departureAirportIata: 'LHR', destinationAirportIata: 'SIN', date: '2026-06-01' });
     expect(toSingapore.candidates).toHaveLength(1);
     expect(toSingapore.candidates[0]!.flightNumber).toBe('BA789');
@@ -98,7 +108,7 @@ describe('FlightScheduleService', () => {
   it('de-duplicates concurrent searches for the same airport and date', async () => {
     let calls = 0;
     const provider = fakeProvider({
-      searchDepartures: async () => {
+      schedule: async () => {
         calls++;
         await new Promise((resolve) => setTimeout(resolve, 5));
         return [candidate()];
@@ -117,7 +127,7 @@ describe('FlightScheduleService', () => {
 
   it('returns an empty, unverified result with a notice when the provider is unavailable', async () => {
     const provider = fakeProvider({
-      searchDepartures: async () => {
+      schedule: async () => {
         throw new FlightProviderUnavailableError('AeroDataBox monthly unit budget exceeded');
       },
     });
@@ -132,7 +142,7 @@ describe('FlightScheduleService', () => {
   it('re-fetches once a cached entry has passed its expiry instead of serving stale data', async () => {
     let calls = 0;
     const provider = fakeProvider({
-      searchDepartures: async () => {
+      schedule: async () => {
         calls++;
         return [candidate()];
       },
@@ -152,7 +162,7 @@ describe('FlightScheduleService', () => {
   });
 
   it('falls back to a manual-entry notice when the configured provider has no schedule search', async () => {
-    const provider = fakeProvider({}); // no searchDepartures implemented (e.g. aviationstack)
+    const provider = fakeProvider({}); // no fetchDepartureSchedule implemented (e.g. aviationstack)
     const service = new FlightScheduleService(provider, fakePrisma());
 
     const result = await service.search({ departureAirportIata: 'LHR', destinationAirportIata: 'DXB', date: '2026-06-01' });

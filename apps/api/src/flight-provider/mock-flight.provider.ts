@@ -22,12 +22,18 @@ export class MockFlightProvider implements IFlightProvider {
     return candidate ? [candidate] : [];
   }
 
-  /** Offline stand-in for an airport-to-airport schedule search: every fixture flight
-   * departing this airport, regardless of destination (the caller filters by destination). */
-  async searchDepartures(departureAirportIata: string, date: string): Promise<FlightCandidate[]> {
+  /** Offline stand-in for an airport-to-airport schedule search: every fixture flight departing
+   * this airport, regardless of destination. The fixture set is tiny (a handful of flights total),
+   * so unlike the real AeroDataBox provider there's no cost to resolving everything eagerly here —
+   * the "schedule" this returns already is the resolved `FlightCandidate[]`. */
+  async fetchDepartureSchedule(departureAirportIata: string, date: string): Promise<FlightCandidate[]> {
     const fixtures = findFlightFixturesByDeparture(departureAirportIata);
     const candidates = await Promise.all(fixtures.map((fixture) => this.buildCandidate(fixture, date)));
     return candidates.filter((c): c is FlightCandidate => c !== undefined);
+  }
+
+  async resolveDeparturesForDestination(schedule: unknown, destinationAirportIata: string): Promise<FlightCandidate[]> {
+    return (schedule as FlightCandidate[]).filter((c) => c.arrivalAirport.iataCode === destinationAirportIata);
   }
 
   private async buildCandidate(fixture: FlightFixture, departureDate: string): Promise<FlightCandidate | undefined> {

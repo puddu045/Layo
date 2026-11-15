@@ -10,9 +10,13 @@ import { FlightProviderUnavailableError } from '../flight-provider/aviationstack
  * from `FlightsService` (flight-number lookup) since the caching strategy is deliberately
  * different: the cache key is `(departureAirportIata, date)` only — never the destination — so
  * that searching the same departure airport/date for a *different* destination reuses the exact
- * same provider response instead of paying for another call. Cached in Postgres (not Redis,
- * which is explicitly best-effort/non-durable — see `RedisService`) for up to 7 days, matching
- * AeroDataBox's free-plan retention limit.
+ * same provider response instead of paying for another call. There's no AeroDataBox endpoint
+ * that takes both a departure AND a destination airport, so fetching the whole day's schedule is
+ * the only way to answer any specific route at all — but the cached/fetched schedule here is a
+ * provider-opaque, pre-database-resolution shape (`unknown`); only the destination the caller
+ * actually asked about gets resolved into real `FlightCandidate`s, by the provider itself, in
+ * `search` below. Cached in Postgres (not Redis, which is explicitly best-effort/non-durable —
+ * see `RedisService`) for up to 7 days, matching AeroDataBox's free-plan retention limit.
  */
 @Injectable()
 export class FlightScheduleService {
@@ -22,7 +26,7 @@ export class FlightScheduleService {
   // same in-flight provider call instead of both firing it. A single API instance is this app's
   // current deployment shape (see Railway setup), so a process-local map is sufficient — a
   // distributed lock would be the next step if this API ever runs more than one instance.
-  private readonly inFlight = new Map<string, Promise<FlightCandidate[]>>();
+  private readonly inFlight = new Map<string, Promise<unknown>>();
 
   constructor(
     @Inject(FLIGHT_PROVIDER) private readonly provider: IFlightProvider,
@@ -31,23 +35,33 @@ export class FlightScheduleService {
 
   async search(request: FlightScheduleSearchRequest): Promise<FlightScheduleSearchResponse> {
     let providerFailureReason: string | undefined;
-    const departures = await this.getDepartures(request.departureAirportIata, request.date, (reason) => {
+    const schedule = await this.getSchedule(request.departureAirportIata, request.date, (reason) => {
       providerFailureReason = reason;
     });
 
-    const candidates = departures.filter((c) => c.arrivalAirport.iataCode === request.destinationAirportIata);
+    if (schedule === undefined || !this.provider.resolveDeparturesForDestination) {
+      return this.buildResponse(request, [], providerFailureReason);
+    }
+
+    // The only step that touches the database — scoped to just the destination asked for, not
+    // the whole day's schedule (see this class's own comment for why that split exists).
+    const candidates = await this.provider.resolveDeparturesForDestination(
+      schedule,
+      request.destinationAirportIata,
+      request.date,
+    );
     return this.buildResponse(request, candidates, providerFailureReason);
   }
 
-  /** All departures from one airport on one date, across every destination — cached and
-   * de-duplicated; callers filter by destination themselves (see `search` above). */
-  private async getDepartures(
+  /** One airport's full raw schedule for one date, across every destination — cached and
+   * de-duplicated, never itself resolved against the database (see `search` above). */
+  private async getSchedule(
     departureAirportIata: string,
     date: string,
     onProviderFailure?: (reason: string) => void,
-  ): Promise<FlightCandidate[]> {
+  ): Promise<unknown> {
     const cached = await this.readCache(departureAirportIata, date);
-    if (cached) return cached;
+    if (cached !== null) return cached;
 
     const dedupeKey = `${departureAirportIata}:${date}`;
     const existing = this.inFlight.get(dedupeKey);
@@ -64,41 +78,41 @@ export class FlightScheduleService {
     departureAirportIata: string,
     date: string,
     onProviderFailure?: (reason: string) => void,
-  ): Promise<FlightCandidate[]> {
-    if (!this.provider.searchDepartures) {
+  ): Promise<unknown> {
+    if (!this.provider.fetchDepartureSchedule) {
       onProviderFailure?.('The current flight-data provider does not support schedule search.');
-      return [];
+      return undefined;
     }
 
     try {
-      const candidates = await this.provider.searchDepartures(departureAirportIata, date);
-      await this.writeCache(departureAirportIata, date, candidates);
-      return candidates;
+      const schedule = await this.provider.fetchDepartureSchedule(departureAirportIata, date);
+      await this.writeCache(departureAirportIata, date, schedule);
+      return schedule;
     } catch (err) {
       if (err instanceof FlightProviderUnavailableError) {
         this.logger.warn(`Flight schedule provider unavailable: ${err.message}`);
         onProviderFailure?.(err.message);
-        return [];
+        return undefined;
       }
       throw err;
     }
   }
 
-  private async readCache(departureAirportIata: string, date: string): Promise<FlightCandidate[] | null> {
+  private async readCache(departureAirportIata: string, date: string): Promise<unknown> {
     const row = await this.prisma.client.flightScheduleCache.findUnique({
       where: { departureAirportIata_date: { departureAirportIata, date } },
     });
     if (!row || row.expiresAt < new Date()) return null;
-    return row.payload as FlightCandidate[];
+    return row.payload;
   }
 
-  private async writeCache(departureAirportIata: string, date: string, candidates: FlightCandidate[]): Promise<void> {
+  private async writeCache(departureAirportIata: string, date: string, schedule: unknown): Promise<void> {
     const env = loadApiEnv();
     const expiresAt = new Date(Date.now() + env.FLIGHT_SCHEDULE_CACHE_TTL_DAYS * 24 * 60 * 60 * 1000);
     await this.prisma.client.flightScheduleCache.upsert({
       where: { departureAirportIata_date: { departureAirportIata, date } },
-      create: { departureAirportIata, date, payload: candidates, expiresAt },
-      update: { payload: candidates, fetchedAt: new Date(), expiresAt },
+      create: { departureAirportIata, date, payload: schedule as object, expiresAt },
+      update: { payload: schedule as object, fetchedAt: new Date(), expiresAt },
     });
   }
 

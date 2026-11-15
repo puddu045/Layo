@@ -51,8 +51,17 @@ export class AeroDataBoxFlightProvider implements IFlightProvider {
    * reserved against the quota separately. If the second window's reservation is refused (quota
    * ran out mid-request), this returns whatever the first window already found rather than
    * failing the whole search — a partial day's results are still useful, and nothing here ever
-   * makes up data for the window that couldn't be fetched. */
-  async searchDepartures(departureAirportIata: string, date: string): Promise<FlightCandidate[]> {
+   * makes up data for the window that couldn't be fetched.
+   *
+   * Deliberately does NOT touch the database — it only fetches and parses, returning a plain
+   * `ParsedCandidate[]` (typed `unknown` at the interface boundary, see `IFlightProvider`). There
+   * is no AeroDataBox endpoint that takes both a departure and a destination airport, so this
+   * whole day's schedule is the only way to answer ANY specific route — but a search only cares
+   * about one destination out of what can be dozens, and resolving every single one into real
+   * Airport/Airline database rows (as this used to) was wasted work for everything except the
+   * handful the caller actually wants. `resolveDeparturesForDestination` below does that part,
+   * scoped to just the matching flights, after this result (or a cached copy of it) is filtered. */
+  async fetchDepartureSchedule(departureAirportIata: string, date: string): Promise<ParsedCandidate[]> {
     const env = this.requireConfig();
     const windows = buildDailyWindows(date);
     const rawFlights: AeroDataBoxAirportFlight[] = [];
@@ -79,21 +88,29 @@ export class AeroDataBoxFlightProvider implements IFlightProvider {
       }
     }
 
-    const parsed = rawFlights
+    return rawFlights
       .map((record) => parseAeroDataBoxFlight(record, date, departureAirportIata))
       .filter((c): c is ParsedCandidate => c !== undefined);
-    return this.toCandidates(parsed);
   }
 
-  /** Resolves every airport/airline exactly once, not once per candidate. A full day's schedule
-   * at a busy airport has massive repetition — dozens of flights can share the same destination
-   * (confirmed in production: ~30 separate LHR departures all going to NCL on one day) — so
-   * looping `toCandidate` per record was both the cause of the connection-pool crash (up to 3
-   * concurrent DB queries per record, fired for every record at once) and, even serialized one at
-   * a time, redundant: the same airport/airline got upserted dozens of times over for no reason.
-   * Deduplicating first turns "flights x 3 queries" into "unique airports + unique airlines"
-   * queries — for a busy hub that's usually a handful of dozens, not low hundreds — run
-   * sequentially to stay well under Supabase's session-pooler connection limit. */
+  /** The one step that actually touches the database — scoped to just the flights going to
+   * `destinationAirportIata`, which for a busy hub's full-day schedule is typically a handful out
+   * of what can be dozens of records overall. */
+  async resolveDeparturesForDestination(
+    schedule: unknown,
+    destinationAirportIata: string,
+  ): Promise<FlightCandidate[]> {
+    const matching = (schedule as ParsedCandidate[]).filter((c) => c.arrival.iataCode === destinationAirportIata);
+    return this.toCandidates(matching);
+  }
+
+  /** Resolves every airport/airline in `parsed` exactly once, not once per candidate — even
+   * scoped to one destination, several flights a day can share an airline (or, for a layover
+   * hub, the same route). Confirmed in production: before this and `resolveDeparturesForDestination`
+   * existed, resolving every flight in a *whole day's* schedule this way (rather than just the
+   * matching destination) both crashed the connection pool (too many concurrent queries) and,
+   * even serialized, was slow enough to make a search hang. Sequential, not `Promise.all`, to stay
+   * well under Supabase's session-pooler connection limit regardless of batch size. */
   private async toCandidates(parsed: ParsedCandidate[]): Promise<FlightCandidate[]> {
     const legsByIata = new Map<string, ParsedLeg>();
     const airlinesByIata = new Map<string, { iataCode?: string; icaoCode?: string; name: string }>();
