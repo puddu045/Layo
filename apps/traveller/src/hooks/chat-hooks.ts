@@ -78,19 +78,28 @@ export function useMessages(connectionId: string | undefined, page = 1, pageSize
   });
 }
 
+interface SendMessageInput {
+  body: string;
+  /** The full message being replied to, if any — just its id goes to the server
+   * (`replyToMessageId`), but the rest lets the optimistic bubble show the same quote preview
+   * immediately, before the server's own copy (with the same quote, resolved fresh) comes back. */
+  replyTo?: Message;
+}
+
 export function useSendMessage(connectionId: string) {
   const queryClient = useQueryClient();
   const { session } = useAuth();
   const messagesKey = ['messages', connectionId, 1];
 
   return useMutation({
-    mutationFn: (body: string) => api.post<Message>(`/connections/${connectionId}/messages`, { body }),
+    mutationFn: ({ body, replyTo }: SendMessageInput) =>
+      api.post<Message>(`/connections/${connectionId}/messages`, { body, replyToMessageId: replyTo?.id }),
     // True optimistic send: the sender's own bubble appears the instant they tap send, before
     // the request even reaches the network — writing the server's response in onSuccess (the
     // previous fix) still waited on a full round trip, which read as lag whenever that request
     // was slow (a cold Railway instance, a weak connection). A client-generated id distinguishes
     // the placeholder from the real row until the response (or a MESSAGE_NEW socket echo) arrives.
-    onMutate: async (body) => {
+    onMutate: async ({ body, replyTo }) => {
       await queryClient.cancelQueries({ queryKey: messagesKey });
       const previous = queryClient.getQueryData<PaginatedResponse<Message>>(messagesKey);
       const senderId = session?.user.id;
@@ -102,6 +111,7 @@ export function useSendMessage(connectionId: string) {
         connectionId,
         senderId,
         body,
+        replyTo: replyTo ? { id: replyTo.id, senderId: replyTo.senderId, body: replyTo.body } : undefined,
         createdAt: new Date().toISOString(),
       };
       queryClient.setQueryData<PaginatedResponse<Message>>(messagesKey, (old) =>
@@ -109,7 +119,7 @@ export function useSendMessage(connectionId: string) {
       );
       return { previous, optimisticId };
     },
-    onSuccess: (message, _body, context) => {
+    onSuccess: (message, _input, context) => {
       queryClient.setQueryData<PaginatedResponse<Message>>(messagesKey, (old) => {
         if (!old) return old;
         const withoutOptimistic = context?.optimisticId
@@ -129,7 +139,7 @@ export function useSendMessage(connectionId: string) {
     },
     // The optimistic bubble is wrong, not just unconfirmed — roll the cache back to what it was
     // before this send, the same way the chat screen already restores the composer's draft text.
-    onError: (_err, _body, context) => {
+    onError: (_err, _input, context) => {
       if (context && 'previous' in context) {
         queryClient.setQueryData(messagesKey, context.previous);
       }

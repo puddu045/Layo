@@ -42,12 +42,15 @@ export const colors = {
   warning: '#C98A1C',
   danger: '#C94B3F',
 
-  // Glass surfaces — still used for a couple of translucent overlays (e.g. the welcome screen's
-  // hero card); everyday cards/buttons use solid `surface`/`primaryTint` instead, see `Card`.
-  glassSurface: 'rgba(255, 255, 255, 0.65)',
-  glassSurfaceStrong: 'rgba(255, 255, 255, 0.35)',
-  glassSurfaceStrongMatch: 'rgba(255, 255, 255, 0.60)',
-  glassBorder: 'rgba(255, 255, 255, 0.65)',
+  // Frosted-glass card surfaces, tinted peach rather than plain white so the background wash
+  // still reads through — see `Card`. `glassSurface` is the everyday card (list rows, match/deal
+  // cards — most of the app), opaque enough to keep dense text legible. `glassSurfaceStrong` is
+  // more transparent, for cards sitting over the bolder `welcomeSky` gradient, where a more
+  // opaque fill would look muddy against its richer colour. `glassBorder` is the same soft
+  // white rim for both — a hairline highlight, the way light catches real glass's edge.
+  glassSurface: 'rgba(255, 234, 219, 0.72)',
+  glassSurfaceStrong: 'rgba(255, 240, 229, 0.45)',
+  glassBorder: 'rgba(255, 255, 255, 0.55)',
 };
 
 export const gradients = {

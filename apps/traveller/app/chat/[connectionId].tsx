@@ -17,6 +17,7 @@ import { Avatar } from '../../src/components/Avatar';
 import { ProfilePreviewModal, connectionToMatchInfo } from '../../src/components/ProfilePreviewModal';
 import { ErrorState, LoadingState } from '../../src/components/StateViews';
 import { ReportReasonSheet } from '../../src/components/ReportReasonSheet';
+import { MessageActionsSheet } from '../../src/components/MessageActionsSheet';
 import {
   useConnections,
   useMarkRead,
@@ -48,6 +49,14 @@ export default function ChatScreen() {
   const [draft, setDraft] = useState('');
   const [reportSheetOpen, setReportSheetOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [actionsTarget, setActionsTarget] = useState<Message | undefined>(undefined);
+  const [replyTo, setReplyTo] = useState<Message | undefined>(undefined);
+
+  // The quoted preview (above the composer, and inside a reply bubble) only ever names "You" or
+  // the other participant — this is a 1:1 conversation, so a quoted message's sender is always
+  // one of exactly those two.
+  const replySenderLabel = (senderId: string) =>
+    senderId === session?.user.id ? 'You' : (connection?.otherProfile.displayName ?? 'them');
 
   const onBlock = () => {
     if (!connection) return;
@@ -107,16 +116,23 @@ export default function ChatScreen() {
   const onSend = () => {
     const body = draft.trim();
     if (!body) return;
+    const replying = replyTo;
     setDraft('');
-    sendMessage.mutate(body, {
-      // A block (by either side) makes send fail even though the composer was still showing —
-      // e.g. the other person blocked this viewer moments ago. Put the draft back so it isn't
-      // silently lost, and say so instead of the message just vanishing with no explanation.
-      onError: (err) => {
-        setDraft(body);
-        notifyInfo('Message not sent', err instanceof Error ? err.message : 'Please try again.');
+    setReplyTo(undefined);
+    sendMessage.mutate(
+      { body, replyTo: replying },
+      {
+        // A block (by either side) makes send fail even though the composer was still showing —
+        // e.g. the other person blocked this viewer moments ago. Put the draft (and the reply
+        // target) back so neither is silently lost, and say so instead of the message just
+        // vanishing with no explanation.
+        onError: (err) => {
+          setDraft(body);
+          setReplyTo(replying);
+          notifyInfo('Message not sent', err instanceof Error ? err.message : 'Please try again.');
+        },
       },
-    });
+    );
   };
 
   const blockedByOther = messages.error instanceof ApiError && messages.error.status === 403;
@@ -201,7 +217,8 @@ export default function ChatScreen() {
                 <MessageBubble
                   message={item}
                   isMine={item.senderId === session?.user.id}
-                  onLongPress={() => onReportMessage(item)}
+                  resolveSenderLabel={replySenderLabel}
+                  onLongPress={() => setActionsTarget(item)}
                 />
               )}
             />
@@ -218,26 +235,56 @@ export default function ChatScreen() {
               </Pressable>
             </View>
           ) : (
-            <View style={styles.inputBar}>
-              <TextInput
-                style={styles.input}
-                value={draft}
-                onChangeText={setDraft}
-                placeholder="Message…"
-                placeholderTextColor={colors.textSecondary}
-                multiline
-              />
-              <Pressable
-                style={[styles.sendButton, !draft.trim() && styles.sendButtonDisabled]}
-                onPress={onSend}
-                disabled={!draft.trim() || sendMessage.isPending}
-              >
-                <Ionicons name="airplane" size={18} color={colors.white} style={styles.sendIcon} />
-              </Pressable>
+            <View>
+              {replyTo && (
+                <View style={styles.replyPreviewBar}>
+                  <View style={styles.replyPreviewAccent} />
+                  <View style={styles.replyPreviewText}>
+                    <Text style={styles.replyPreviewLabel}>Replying to {replySenderLabel(replyTo.senderId)}</Text>
+                    <Text style={styles.replyPreviewBody} numberOfLines={1}>
+                      {replyTo.body}
+                    </Text>
+                  </View>
+                  <Pressable onPress={() => setReplyTo(undefined)} hitSlop={8}>
+                    <Ionicons name="close" size={18} color={colors.textSecondary} />
+                  </Pressable>
+                </View>
+              )}
+              <View style={styles.inputBar}>
+                <TextInput
+                  style={styles.input}
+                  value={draft}
+                  onChangeText={setDraft}
+                  placeholder="Message…"
+                  placeholderTextColor={colors.textSecondary}
+                  multiline
+                />
+                <Pressable
+                  style={[styles.sendButton, !draft.trim() && styles.sendButtonDisabled]}
+                  onPress={onSend}
+                  disabled={!draft.trim() || sendMessage.isPending}
+                >
+                  <Ionicons name="airplane" size={18} color={colors.white} style={styles.sendIcon} />
+                </Pressable>
+              </View>
             </View>
           )}
         </KeyboardAvoidingView>
       )}
+
+      <MessageActionsSheet
+        visible={!!actionsTarget}
+        canReport={!!actionsTarget && actionsTarget.senderId !== session?.user.id}
+        onReply={() => {
+          setReplyTo(actionsTarget);
+          setActionsTarget(undefined);
+        }}
+        onReport={() => {
+          if (actionsTarget) onReportMessage(actionsTarget);
+          setActionsTarget(undefined);
+        }}
+        onCancel={() => setActionsTarget(undefined)}
+      />
 
       <ReportReasonSheet
         visible={reportSheetOpen}
@@ -258,19 +305,31 @@ export default function ChatScreen() {
 function MessageBubble({
   message,
   isMine,
+  resolveSenderLabel,
   onLongPress,
 }: {
   message: Message;
   isMine: boolean;
+  resolveSenderLabel: (senderId: string) => string;
   onLongPress: () => void;
 }) {
   const time = new Date(message.createdAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
   return (
     <Pressable
-      onLongPress={isMine ? undefined : onLongPress}
+      onLongPress={onLongPress}
       style={[styles.bubbleRow, isMine ? styles.bubbleRowMine : styles.bubbleRowTheirs]}
     >
       <View style={[styles.bubble, isMine ? styles.bubbleMine : styles.bubbleTheirs]}>
+        {message.replyTo && (
+          <View style={[styles.quoteBlock, isMine && styles.quoteBlockMine]}>
+            <Text style={[styles.quoteLabel, isMine && styles.quoteTextMine]} numberOfLines={1}>
+              {resolveSenderLabel(message.replyTo.senderId)}
+            </Text>
+            <Text style={[styles.quoteBody, isMine && styles.quoteTextMine]} numberOfLines={1}>
+              {message.replyTo.body}
+            </Text>
+          </View>
+        )}
         <Text style={[styles.bubbleText, isMine && styles.bubbleTextMine]}>{message.body}</Text>
       </View>
       <Text style={styles.bubbleTime}>{time}</Text>
@@ -297,6 +356,16 @@ const styles = StyleSheet.create({
   bubbleText: { ...typography.body, color: colors.textPrimary },
   bubbleTextMine: { color: colors.white },
   bubbleTime: { ...typography.caption, color: colors.textSecondary, marginTop: 2 },
+  quoteBlock: {
+    borderLeftWidth: 3,
+    borderLeftColor: colors.primary,
+    paddingLeft: spacing.sm,
+    marginBottom: spacing.xs,
+  },
+  quoteBlockMine: { borderLeftColor: 'rgba(255, 255, 255, 0.6)' },
+  quoteLabel: { ...typography.label, color: colors.primary },
+  quoteBody: { ...typography.caption, color: colors.textSecondary },
+  quoteTextMine: { color: 'rgba(255, 255, 255, 0.75)' },
   blockedBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -309,6 +378,19 @@ const styles = StyleSheet.create({
   },
   blockedText: { ...typography.body, color: colors.textSecondary, flex: 1 },
   blockedAction: { ...typography.body, color: colors.primary, fontWeight: '600' },
+  replyPreviewBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xs,
+    backgroundColor: colors.surface,
+    gap: spacing.sm,
+  },
+  replyPreviewAccent: { width: 3, alignSelf: 'stretch', borderRadius: radius.sm, backgroundColor: colors.primary },
+  replyPreviewText: { flex: 1 },
+  replyPreviewLabel: { ...typography.label, color: colors.primary },
+  replyPreviewBody: { ...typography.caption, color: colors.textSecondary },
   inputBar: {
     flexDirection: 'row',
     alignItems: 'flex-end',

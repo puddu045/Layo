@@ -4,14 +4,30 @@ import { paginationQuerySchema } from './common';
 /** The connectionId comes from the URL (`/connections/:connectionId/messages`), not the body. */
 export const sendMessageRequestSchema = z.object({
   body: z.string().trim().min(1).max(2000),
+  /** The message being replied to, if any — must belong to the same connection (checked
+   * server-side); silently ignored otherwise rather than failing the whole send. */
+  replyToMessageId: z.string().uuid().optional(),
 });
 export type SendMessageRequest = z.infer<typeof sendMessageRequestSchema>;
+
+/** A lightweight quote of the replied-to message — just enough to render the preview above a
+ * reply bubble, resolved fresh from `Message.replyTo` on every read rather than snapshotted at
+ * send time, so an edit (if that's ever added) would show up too. Absent whenever
+ * `replyToMessageId` is unset, or the original message was itself deleted (the column is nulled
+ * out in that case — see the schema). */
+export const messageReplyPreviewSchema = z.object({
+  id: z.string().uuid(),
+  senderId: z.string().uuid(),
+  body: z.string(),
+});
+export type MessageReplyPreview = z.infer<typeof messageReplyPreviewSchema>;
 
 export const messageSchema = z.object({
   id: z.string().uuid(),
   connectionId: z.string().uuid(),
   senderId: z.string().uuid(),
   body: z.string(),
+  replyTo: messageReplyPreviewSchema.optional(),
   createdAt: z.string().datetime(),
   readAt: z.string().datetime().optional(),
 });

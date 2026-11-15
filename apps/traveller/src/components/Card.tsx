@@ -10,9 +10,10 @@ interface CardProps extends ViewProps {
 }
 
 /**
- * The default surface for everything from match cards to deal cards: a
- * solid white panel over the app's pastel-peach background wash, with a
- * hairline border and a subtle shadow for lift.
+ * The default surface for everything from match cards to deal cards: a translucent, peach-
+ * tinted glass panel over the app's background wash (see `colors.glassSurface`), with a soft
+ * white hairline rim and a subtle shadow for lift — not solid white, so the wash behind it still
+ * shows through.
  */
 export function Card({ style, children, variant = 'solid', ...rest }: CardProps) {
   return (
@@ -24,15 +25,16 @@ export function Card({ style, children, variant = 'solid', ...rest }: CardProps)
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: colors.surface,
+    backgroundColor: colors.glassSurface,
     borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.glassBorder,
     padding: spacing.lg,
     ...shadow.card,
   },
+  // Lighter/more transparent than the default — for cards sitting over the bolder `welcomeSky`
+  // gradient (the welcome screen), where `glassSurface`'s opacity would look muddy against it.
   cardGlass: {
-    backgroundColor: colors.glassSurface,
-    borderColor: colors.glassBorder,
+    backgroundColor: colors.glassSurfaceStrong,
   },
 });

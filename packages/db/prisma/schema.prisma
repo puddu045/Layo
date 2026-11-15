@@ -263,14 +263,19 @@ model Connection {
 }
 
 model Message {
-  id           String     @id @default(uuid())
-  connectionId String
-  connection   Connection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
-  senderId     String
-  sender       User       @relation(fields: [senderId], references: [id])
-  body         String
-  createdAt    DateTime   @default(now())
-  readAt       DateTime?
+  id               String     @id @default(uuid())
+  connectionId     String
+  connection       Connection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  senderId         String
+  sender           User       @relation(fields: [senderId], references: [id])
+  body             String
+  // The message this one is replying to, if any — nulled out (not cascaded) if that message is
+  // ever removed, so a reply never becomes a dangling/invalid row, it just loses its quote.
+  replyToMessageId String?
+  replyTo          Message?   @relation("MessageReplies", fields: [replyToMessageId], references: [id], onDelete: SetNull)
+  replies          Message[]  @relation("MessageReplies")
+  createdAt        DateTime   @default(now())
+  readAt           DateTime?
 
   @@index([connectionId, createdAt])
 }

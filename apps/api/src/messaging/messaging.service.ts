@@ -36,6 +36,7 @@ export class MessagingService {
         orderBy: { createdAt: 'desc' },
         skip: (query.page - 1) * query.pageSize,
         take: query.pageSize,
+        include: { replyTo: { select: { id: true, senderId: true, body: true } } },
       }),
       this.prisma.client.message.count({ where: { connectionId } }),
     ]);
@@ -59,9 +60,19 @@ export class MessagingService {
       throw new ForbiddenException('You cannot message this user');
     }
 
+    // Dropped rather than rejected if it doesn't check out (already gone, or — since a client
+    // only ever offers to reply to a message it already has rendered — somehow from a different
+    // connection): a reply quote is a nice-to-have, not worth failing the whole send over.
+    const replyToMessageId = dto.replyToMessageId
+      ? await this.prisma.client.message
+          .findUnique({ where: { id: dto.replyToMessageId }, select: { connectionId: true } })
+          .then((m) => (m?.connectionId === connectionId ? dto.replyToMessageId : undefined))
+      : undefined;
+
     const [row] = await this.prisma.client.$transaction([
       this.prisma.client.message.create({
-        data: { connectionId, senderId: userId, body: dto.body },
+        data: { connectionId, senderId: userId, body: dto.body, replyToMessageId },
+        include: { replyTo: { select: { id: true, senderId: true, body: true } } },
       }),
       this.prisma.client.connection.update({
         where: { id: connectionId },
@@ -133,6 +144,7 @@ function toMessageDto(row: {
   connectionId: string;
   senderId: string;
   body: string;
+  replyTo: { id: string; senderId: string; body: string } | null;
   createdAt: Date;
   readAt: Date | null;
 }): Message {
@@ -141,6 +153,7 @@ function toMessageDto(row: {
     connectionId: row.connectionId,
     senderId: row.senderId,
     body: row.body,
+    replyTo: row.replyTo ?? undefined,
     createdAt: row.createdAt.toISOString(),
     readAt: row.readAt?.toISOString(),
   };
