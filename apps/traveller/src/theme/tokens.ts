@@ -51,6 +51,10 @@ export const colors = {
   // the same reason, paired with `shadow.card` for lift.
   glassSurface: 'rgba(255, 248, 242, 0.85)',
   glassBorder: 'rgba(255, 255, 255, 0.8)',
+  // The sender's own chat bubble — translucent `primary` blue rather than the old flat opaque
+  // navy, so it reads as the same glass language as everything else instead of being the one
+  // leftover solid surface in the app.
+  glassSurfaceBlue: 'rgba(40, 120, 199, 0.82)',
 };
 
 export const gradients = {
