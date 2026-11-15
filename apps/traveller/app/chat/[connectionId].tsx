@@ -266,8 +266,9 @@ export default function ChatScreen() {
                   style={[styles.sendButton, !draft.trim() && styles.sendButtonDisabled]}
                   onPress={onSend}
                   disabled={!draft.trim() || sendMessage.isPending}
+                  hitSlop={8}
                 >
-                  <Ionicons name="airplane" size={18} color={colors.white} style={styles.sendIcon} />
+                  <Ionicons name="airplane" size={24} color={colors.primary} style={styles.sendIcon} />
                 </Pressable>
               </View>
             </View>
@@ -474,11 +475,12 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: colors.textPrimary,
   },
+  // Just the icon now, no button chrome — the plain airplane glyph alone, not filled onto a
+  // circle. `colors.primary` gives it enough contrast to still read against the white input
+  // bar on its own.
   sendButton: {
     width: 40,
     height: 40,
-    borderRadius: radius.pill,
-    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
