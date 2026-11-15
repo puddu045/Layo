@@ -5,6 +5,7 @@ import { signInRequestSchema } from '@layo/contracts';
 import { ScreenContainer } from '../../src/components/ScreenContainer';
 import { TextField } from '../../src/components/TextField';
 import { Button } from '../../src/components/Button';
+import { Wordmark } from '../../src/components/Wordmark';
 import { useAuth } from '../../src/lib/auth-context';
 import { notifyInfo } from '../../src/lib/notify';
 import { colors, spacing, typography } from '../../src/theme/tokens';
@@ -61,6 +62,7 @@ export default function Login() {
     <ScreenContainer>
       {/* 'height' on Android, not undefined: see journeys/new.tsx for why. */}
       <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        <Wordmark width={120} style={styles.wordmark} />
         <Text style={styles.title}>Welcome back</Text>
         <Text style={styles.subtitle}>Sign in to continue to your journeys.</Text>
 
@@ -97,10 +99,18 @@ export default function Login() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, justifyContent: 'center' },
+  wordmark: { alignSelf: 'center', marginBottom: spacing.lg },
   title: { ...typography.display, color: colors.navy900, marginBottom: spacing.xs },
   subtitle: { ...typography.body, color: colors.textSecondary, marginBottom: spacing.xl },
   error: { ...typography.caption, color: colors.danger, marginBottom: spacing.md },
-  forgotLink: { ...typography.caption, color: colors.primary, fontWeight: '600', textAlign: 'right', marginBottom: spacing.md },
+  forgotLink: {
+    ...typography.caption,
+    color: colors.primary,
+    fontWeight: '600',
+    textAlign: 'center',
+    alignSelf: 'stretch',
+    marginBottom: spacing.md,
+  },
   footer: { flexDirection: 'row', justifyContent: 'center', marginTop: spacing.lg, gap: spacing.xs },
   footerText: { ...typography.body, color: colors.textSecondary },
   link: { ...typography.body, color: colors.primary, fontWeight: '600' },

@@ -16,6 +16,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from '../../src/components/Button';
 import { Card } from '../../src/components/Card';
+import { Wordmark } from '../../src/components/Wordmark';
 import {
   colors,
   gradients,
@@ -101,27 +102,6 @@ function HeroArt({ iconTranslate }: { iconTranslate: ReturnType<typeof getIconTr
         </LinearGradient>
       </View>
     </View>
-  );
-}
-
-/** The "Layo" wordmark with its small coral heart accent, pre-rendered to a single image
- * (`layo-wordmark.png`, generated from this exact Pacifico file + the same Ionicons glyph used
- * elsewhere — see the generation script) rather than live Text + an icon.
- *
- * This replaced a live-text version after its tail swash and the heart kept clipping on native
- * even with generous padding — script fonts' loops and descenders overshoot a typical sans
- * font's em-box on every side, and native text rendering enforces that box far more strictly than
- * react-native-web does for the same font, so "fine on web" was never proof it had enough room on
- * native. A plain image has no font-metric box to clip against on any platform — what you see
- * here is pixel-identical everywhere this renders. */
-function Wordmark() {
-  return (
-    <Image
-      source={require('../../assets/images/layo-wordmark.png')}
-      style={styles.wordmarkImage}
-      resizeMode="contain"
-      accessibilityLabel={BRAND.name}
-    />
   );
 }
 
@@ -445,10 +425,6 @@ const styles = StyleSheet.create({
     left: -22,
     opacity: 0.6,
   },
-  // Fixed aspect ratio matching the generated PNG (1065×669) — an explicit width/height, not just
-  // resizeMode="contain" on an unsized box, so layout (including the hidden measurement copies
-  // below) has a real size to work with before the image itself has necessarily loaded.
-  wordmarkImage: { width: 176, height: 176 / (1065 / 669) },
   tagline: {
     ...typography.body,
     color: colors.textSecondary,
