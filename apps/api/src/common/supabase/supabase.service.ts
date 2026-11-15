@@ -1,6 +1,6 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import jwt from 'jsonwebtoken';
+import { createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey } from 'jose';
 import { loadApiEnv } from '@layo/config';
 
 export interface AuthenticatedUser {
@@ -14,50 +14,55 @@ export interface AuthenticatedUser {
  */
 @Injectable()
 export class SupabaseService {
+  private readonly logger = new Logger(SupabaseService.name);
   readonly admin: SupabaseClient;
-  private readonly jwtSecret: string;
+  private readonly jwks: JWTVerifyGetKey;
 
   constructor() {
     const env = loadApiEnv();
     this.admin = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
-    this.jwtSecret = env.SUPABASE_JWT_SECRET;
+    // This project's current signing method (and the default for any Supabase project created
+    // recently enough) is an ES256 key pair under "JWT Signing Keys" in the dashboard, not the
+    // legacy shared HS256 "JWT Secret" — an earlier version of this method verified against that
+    // legacy secret directly, which worked for this project only until Supabase auto-rotated it
+    // to the new key type, after which every access token started failing local verification
+    // silently and falling back to the slow remote check *on every single request* — exactly the
+    // kind of regression a hardcoded secret can't recover from on its own. `jose`'s remote JWKS
+    // set instead fetches Supabase's published public keys from this standard discovery endpoint
+    // once and caches them, only re-fetching if a token references a key id it hasn't seen (an
+    // actual rotation) — no per-request network call, and no code change needed next time
+    // Supabase rotates this key, since it always re-syncs to whatever's currently published.
+    this.jwks = createRemoteJWKSet(new URL(`${env.SUPABASE_URL}/auth/v1/.well-known/jwks.json`));
   }
 
-  /** Verifies a bearer access token's signature and expiry locally against the project's JWT
-   * secret first — this used to call Supabase Auth's `getUser` API on every single request (and
-   * every socket handshake), which meant every request in the app depended on a live round trip
-   * to Supabase's own Auth service. Supabase's access tokens are HS256-signed with this secret
-   * specifically so a backend can verify them without that call (this is Supabase's own
-   * documented approach) — same guarantees (valid signature + not expired), no network hop.
-   *
-   * Falls back to the original remote check whenever local verification fails for *any* reason
-   * — a wrong/stale `SUPABASE_JWT_SECRET`, or this project actually using Supabase's newer
-   * asymmetric JWT Signing Keys instead of the legacy shared secret, would otherwise mean every
-   * login fails outright with no way to tell which it was from the outside. This keeps auth
-   * working (at the old, slower cost) in either case, and automatically gets fast again the
-   * moment local verification actually succeeds — no further deploy needed once the secret/setup
-   * is fixed. */
+  /** Verifies a bearer access token's signature and expiry locally against Supabase's published
+   * JWKS first — see this class's own comment for why that's the right thing to verify against,
+   * not a hardcoded secret. Falls back to the original remote `getUser` check whenever local
+   * verification fails for *any* reason (a JWKS fetch failure, a signing method this doesn't
+   * anticipate), so auth never breaks outright over it — it just runs at the old, slower cost
+   * until whatever caused the local check to fail is resolved. */
   async verifyAccessToken(accessToken: string): Promise<AuthenticatedUser | null> {
-    const local = this.verifyAccessTokenLocally(accessToken);
+    const local = await this.verifyAccessTokenLocally(accessToken);
     if (local) return local;
     return this.verifyAccessTokenRemotely(accessToken);
   }
 
-  private verifyAccessTokenLocally(accessToken: string): AuthenticatedUser | null {
+  private async verifyAccessTokenLocally(accessToken: string): Promise<AuthenticatedUser | null> {
     try {
-      const payload = jwt.verify(accessToken, this.jwtSecret, { algorithms: ['HS256'] });
-      if (
-        typeof payload !== 'object' ||
-        payload.aud !== 'authenticated' ||
-        typeof payload.sub !== 'string' ||
-        typeof payload.email !== 'string'
-      ) {
-        return null;
-      }
+      const { payload } = await jwtVerify(accessToken, this.jwks, {
+        audience: 'authenticated',
+        algorithms: ['ES256'],
+      });
+      if (typeof payload.sub !== 'string' || typeof payload.email !== 'string') return null;
       return { id: payload.sub, email: payload.email };
-    } catch {
+    } catch (err) {
+      // Logged at debug rather than swallowed entirely — the remote fallback below means this
+      // never breaks auth, but a JWKS-side problem (vs. just an expired/garbage token, the
+      // overwhelmingly common case) is worth being able to see if every request is suddenly slow
+      // again the way the hardcoded-secret version was for four days with nothing in the logs.
+      this.logger.debug(`Local token verification failed, falling back to remote: ${err instanceof Error ? err.message : err}`);
       return null;
     }
   }
