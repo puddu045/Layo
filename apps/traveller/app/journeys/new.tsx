@@ -1,14 +1,20 @@
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { router } from 'expo-router';
-import { flightLookupRequestSchema, manualFlightEntrySchema, type AddJourneySegmentRequest, type FlightCandidate } from '@layo/contracts';
+import {
+  flightLookupRequestSchema,
+  flightScheduleSearchRequestSchema,
+  manualFlightEntrySchema,
+  type AddJourneySegmentRequest,
+  type FlightCandidate,
+} from '@layo/contracts';
 import { ScreenContainer } from '../../src/components/ScreenContainer';
 import { TextField } from '../../src/components/TextField';
 import { DatePickerField } from '../../src/components/DatePickerField';
 import { DateTimePickerField } from '../../src/components/DateTimePickerField';
 import { Button } from '../../src/components/Button';
 import { Card } from '../../src/components/Card';
-import { useCreateJourney, useFlightLookup } from '../../src/hooks/api-hooks';
+import { useCreateJourney, useFlightLookup, useFlightScheduleSearch } from '../../src/hooks/api-hooks';
 import { colors, radius, spacing, typography } from '../../src/theme/tokens';
 
 interface AddedSegment {
@@ -17,12 +23,22 @@ interface AddedSegment {
   request: AddJourneySegmentRequest;
 }
 
+type SearchMode = 'number' | 'route';
+
 export default function NewJourney() {
   const flightLookup = useFlightLookup();
+  const scheduleSearch = useFlightScheduleSearch();
   const createJourney = useCreateJourney();
+
+  const [searchMode, setSearchMode] = useState<SearchMode>('number');
 
   const [flightNumber, setFlightNumber] = useState('');
   const [departureDate, setDepartureDate] = useState('');
+
+  const [routeDeparture, setRouteDeparture] = useState('');
+  const [routeDestination, setRouteDestination] = useState('');
+  const [routeDate, setRouteDate] = useState('');
+
   const [lookupError, setLookupError] = useState<string | undefined>();
   const [showManualForm, setShowManualForm] = useState(false);
   const [segments, setSegments] = useState<AddedSegment[]>([]);
@@ -38,7 +54,12 @@ export default function NewJourney() {
     scheduledArrivalUtc: '',
   });
 
-  const onSearch = () => {
+  // Whichever search just ran — needed so `addCandidate` knows which local departure date to
+  // send back when confirming the selection (the server re-verifies by flight number + that
+  // same date, regardless of which search found the candidate in the first place).
+  const activeSearch = searchMode === 'number' ? flightLookup : scheduleSearch;
+
+  const onSearchByNumber = () => {
     setLookupError(undefined);
     const parsed = flightLookupRequestSchema.safeParse({ flightNumber, departureDate });
     if (!parsed.success) {
@@ -50,7 +71,24 @@ export default function NewJourney() {
     });
   };
 
+  const onSearchByRoute = () => {
+    setLookupError(undefined);
+    const parsed = flightScheduleSearchRequestSchema.safeParse({
+      departureAirportIata: routeDeparture,
+      destinationAirportIata: routeDestination,
+      date: routeDate,
+    });
+    if (!parsed.success) {
+      setLookupError(parsed.error.issues[0]?.message ?? 'Enter both airports and a date');
+      return;
+    }
+    scheduleSearch.mutate(parsed.data, {
+      onError: (err) => setLookupError(err instanceof Error ? err.message : 'Search failed'),
+    });
+  };
+
   const addCandidate = (candidate: FlightCandidate) => {
+    const candidateDate = searchMode === 'number' ? departureDate : routeDate;
     setSegments((prev) => [
       ...prev,
       {
@@ -59,7 +97,7 @@ export default function NewJourney() {
         request: {
           confirmedFlight: {
             flightNumber: candidate.flightNumber,
-            departureDate,
+            departureDate: candidateDate,
             providerRef: candidate.providerRef,
           },
         },
@@ -67,7 +105,11 @@ export default function NewJourney() {
     ]);
     setFlightNumber('');
     setDepartureDate('');
+    setRouteDeparture('');
+    setRouteDestination('');
+    setRouteDate('');
     flightLookup.reset();
+    scheduleSearch.reset();
   };
 
   const addManual = () => {
@@ -148,31 +190,79 @@ export default function NewJourney() {
           </View>
         )}
 
-        <Card>
-          <Text style={styles.sectionTitle}>
-            {segments.length === 0 ? 'Add your first flight' : 'Add another flight'}
-          </Text>
-          <TextField
-            label="Flight number"
-            placeholder="BA123"
-            autoCapitalize="characters"
-            value={flightNumber}
-            onChangeText={setFlightNumber}
-          />
-          <DatePickerField
-            label="Departure date"
-            value={departureDate}
-            onChange={setDepartureDate}
-            minimumDate={new Date()}
-          />
-          {lookupError ? <Text style={styles.error}>{lookupError}</Text> : null}
-          <Button label="Search" onPress={onSearch} loading={flightLookup.isPending} />
-        </Card>
+        <View style={styles.modeToggle}>
+          <View style={{ flex: 1 }}>
+            <Button
+              label="By flight number"
+              variant={searchMode === 'number' ? 'primary' : 'secondary'}
+              onPress={() => {
+                setSearchMode('number');
+                setLookupError(undefined);
+              }}
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Button
+              label="By route"
+              variant={searchMode === 'route' ? 'primary' : 'secondary'}
+              onPress={() => {
+                setSearchMode('route');
+                setLookupError(undefined);
+              }}
+            />
+          </View>
+        </View>
 
-        {flightLookup.data && (
+        {searchMode === 'number' ? (
+          <Card>
+            <Text style={styles.sectionTitle}>
+              {segments.length === 0 ? 'Add your first flight' : 'Add another flight'}
+            </Text>
+            <TextField
+              label="Flight number"
+              placeholder="BA123"
+              autoCapitalize="characters"
+              value={flightNumber}
+              onChangeText={setFlightNumber}
+            />
+            <DatePickerField
+              label="Departure date"
+              value={departureDate}
+              onChange={setDepartureDate}
+              minimumDate={new Date()}
+            />
+            {lookupError ? <Text style={styles.error}>{lookupError}</Text> : null}
+            <Button label="Search" onPress={onSearchByNumber} loading={flightLookup.isPending} />
+          </Card>
+        ) : (
+          <Card>
+            <Text style={styles.sectionTitle}>
+              {segments.length === 0 ? 'Find your first flight' : 'Find another flight'}
+            </Text>
+            <TextField
+              label="Departure airport (IATA)"
+              placeholder="LHR"
+              autoCapitalize="characters"
+              value={routeDeparture}
+              onChangeText={setRouteDeparture}
+            />
+            <TextField
+              label="Destination airport (IATA)"
+              placeholder="DXB"
+              autoCapitalize="characters"
+              value={routeDestination}
+              onChangeText={setRouteDestination}
+            />
+            <DatePickerField label="Travel date" value={routeDate} onChange={setRouteDate} minimumDate={new Date()} />
+            {lookupError ? <Text style={styles.error}>{lookupError}</Text> : null}
+            <Button label="Search" onPress={onSearchByRoute} loading={scheduleSearch.isPending} />
+          </Card>
+        )}
+
+        {activeSearch.data && (
           <View style={styles.results}>
-            {flightLookup.data.notice ? <Text style={styles.notice}>{flightLookup.data.notice}</Text> : null}
-            {flightLookup.data.candidates.map((candidate) => (
+            {activeSearch.data.notice ? <Text style={styles.notice}>{activeSearch.data.notice}</Text> : null}
+            {activeSearch.data.candidates.map((candidate) => (
               <Pressable key={candidate.providerRef} onPress={() => addCandidate(candidate)}>
                 <Card style={styles.candidateCard}>
                   <Text style={styles.candidateTitle}>
@@ -186,11 +276,14 @@ export default function NewJourney() {
                     {new Date(candidate.scheduledDepartureUtc).toLocaleString()} →{' '}
                     {new Date(candidate.scheduledArrivalUtc).toLocaleString()}
                   </Text>
+                  {candidate.status !== 'SCHEDULED' && (
+                    <Text style={styles.candidateStatus}>Status: {candidate.status}</Text>
+                  )}
                   <Text style={styles.candidateTapHint}>Tap to add this flight</Text>
                 </Card>
               </Pressable>
             ))}
-            {flightLookup.data.candidates.length === 0 && (
+            {activeSearch.data.candidates.length === 0 && (
               <Button
                 label="Add this flight manually instead"
                 variant="secondary"
@@ -272,6 +365,7 @@ const styles = StyleSheet.create({
   keyboardAvoider: { flex: 1 },
   scroll: { paddingVertical: spacing.lg, paddingBottom: spacing.xxl, gap: spacing.md },
   sectionTitle: { ...typography.subtitle, color: colors.textPrimary, marginBottom: spacing.sm },
+  modeToggle: { flexDirection: 'row', gap: spacing.sm },
   error: { ...typography.caption, color: colors.danger, marginBottom: spacing.sm },
   notice: { ...typography.caption, color: colors.warning, marginBottom: spacing.sm },
   results: { gap: spacing.sm },
@@ -279,6 +373,7 @@ const styles = StyleSheet.create({
   candidateTitle: { ...typography.subtitle, color: colors.textPrimary },
   candidateRoute: { ...typography.body, color: colors.navy700, marginTop: 2 },
   candidateTime: { ...typography.caption, color: colors.textSecondary, marginTop: 2 },
+  candidateStatus: { ...typography.caption, color: colors.warning, marginTop: 2, fontWeight: '600' },
   candidateTapHint: { ...typography.caption, color: colors.primary, fontWeight: '600', marginTop: spacing.xs },
   manualNotice: { ...typography.caption, color: colors.warning, marginBottom: spacing.sm },
   segmentList: { marginBottom: spacing.sm },

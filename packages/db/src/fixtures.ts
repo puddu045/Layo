@@ -220,6 +220,13 @@ export function findFlightFixture(flightNumber: string): FlightFixture | undefin
   return FLIGHT_FIXTURES.find((f) => f.flightNumber === normalized);
 }
 
+/** Every fixture departing a given airport — backs `MockFlightProvider.searchDepartures`, the
+ * offline stand-in for an airport-to-airport schedule search. */
+export function findFlightFixturesByDeparture(departureAirportIata: string): FlightFixture[] {
+  const normalized = departureAirportIata.trim().toUpperCase();
+  return FLIGHT_FIXTURES.filter((f) => f.departureAirportIata === normalized);
+}
+
 /** A demo traveller's journey, expressed as an ordered list of flight numbers plus the
  * local departure date (at that segment's own departure airport) each should be looked up for. */
 export interface DemoJourneyFixture {

@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { findFlightFixture, resolveFixtureTimes } from '@layo/db';
+import { findFlightFixture, findFlightFixturesByDeparture, resolveFixtureTimes, type FlightFixture } from '@layo/db';
 import type { Airline, Airport, FlightCandidate } from '@layo/contracts';
 import { PrismaService } from '../common/prisma/prisma.service';
 import type { IFlightProvider } from './flight-provider.interface';
@@ -18,13 +18,25 @@ export class MockFlightProvider implements IFlightProvider {
   async lookup(flightNumber: string, departureDate: string): Promise<FlightCandidate[]> {
     const fixture = findFlightFixture(flightNumber);
     if (!fixture) return [];
+    const candidate = await this.buildCandidate(fixture, departureDate);
+    return candidate ? [candidate] : [];
+  }
 
+  /** Offline stand-in for an airport-to-airport schedule search: every fixture flight
+   * departing this airport, regardless of destination (the caller filters by destination). */
+  async searchDepartures(departureAirportIata: string, date: string): Promise<FlightCandidate[]> {
+    const fixtures = findFlightFixturesByDeparture(departureAirportIata);
+    const candidates = await Promise.all(fixtures.map((fixture) => this.buildCandidate(fixture, date)));
+    return candidates.filter((c): c is FlightCandidate => c !== undefined);
+  }
+
+  private async buildCandidate(fixture: FlightFixture, departureDate: string): Promise<FlightCandidate | undefined> {
     const [departureAirport, arrivalAirport, airline] = await Promise.all([
       this.prisma.client.airport.findUnique({ where: { iataCode: fixture.departureAirportIata } }),
       this.prisma.client.airport.findUnique({ where: { iataCode: fixture.arrivalAirportIata } }),
       this.prisma.client.airline.findUnique({ where: { iataCode: fixture.airlineIataCode } }),
     ]);
-    if (!departureAirport || !arrivalAirport || !airline) return [];
+    if (!departureAirport || !arrivalAirport || !airline) return undefined;
 
     const { scheduledDepartureUtc, scheduledArrivalUtc } = resolveFixtureTimes(
       fixture,
@@ -33,7 +45,7 @@ export class MockFlightProvider implements IFlightProvider {
       departureDate,
     );
 
-    const candidate: FlightCandidate = {
+    return {
       providerRef: `mock:${fixture.flightNumber}:${departureDate}`,
       airline: toAirlineDto(airline),
       flightNumber: fixture.flightNumber,
@@ -48,8 +60,6 @@ export class MockFlightProvider implements IFlightProvider {
       dataSource: 'MOCK',
       isCodeshare: Boolean(fixture.operatingFlightNumber),
     };
-
-    return [candidate];
   }
 }
 

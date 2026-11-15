@@ -13,7 +13,7 @@ export const flightStatusSchema = z.enum([
 ]);
 export type FlightStatus = z.infer<typeof flightStatusSchema>;
 
-export const flightDataSourceSchema = z.enum(['MOCK', 'AVIATIONSTACK', 'MANUAL']);
+export const flightDataSourceSchema = z.enum(['MOCK', 'AVIATIONSTACK', 'AERODATABOX', 'MANUAL']);
 export type FlightDataSource = z.infer<typeof flightDataSourceSchema>;
 
 export const flightLookupRequestSchema = z.object({
@@ -47,6 +47,30 @@ export const flightLookupResponseSchema = z.object({
   notice: z.string().optional(),
 });
 export type FlightLookupResponse = z.infer<typeof flightLookupResponseSchema>;
+
+/** Airport-to-airport schedule search (e.g. "what flies LHR -> DXB on this date"), distinct
+ * from `flightLookupRequestSchema` above (which looks up one already-known flight number). */
+export const flightScheduleSearchRequestSchema = z
+  .object({
+    departureAirportIata: iataAirportCodeSchema,
+    destinationAirportIata: iataAirportCodeSchema,
+    date: isoDateSchema,
+  })
+  .refine((v) => v.departureAirportIata !== v.destinationAirportIata, {
+    message: 'Departure and destination airports must be different',
+    path: ['destinationAirportIata'],
+  });
+export type FlightScheduleSearchRequest = z.infer<typeof flightScheduleSearchRequestSchema>;
+
+/** Same candidate shape as a flight-number lookup — a schedule-search result is confirmed into
+ * a journey the exact same way (`confirmedFlightSelectionSchema`, matched by `providerRef`). */
+export const flightScheduleSearchResponseSchema = z.object({
+  query: flightScheduleSearchRequestSchema,
+  candidates: z.array(flightCandidateSchema),
+  verified: z.boolean(),
+  notice: z.string().optional(),
+});
+export type FlightScheduleSearchResponse = z.infer<typeof flightScheduleSearchResponseSchema>;
 
 /** A manually entered flight, used when no provider data is available. Always unverified. */
 export const manualFlightEntrySchema = z.object({

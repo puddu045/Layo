@@ -360,7 +360,7 @@ function toJourneyDto(journey: {
       arrivalTerminal: s.flight.arrivalTerminal ?? undefined,
       status: s.flight.status as Journey['segments'][number]['flight']['status'],
       dataSource: s.flight.dataSource as Journey['segments'][number]['flight']['dataSource'],
-      verified: s.flight.dataSource === 'AVIATIONSTACK',
+      verified: s.flight.dataSource === 'AVIATIONSTACK' || s.flight.dataSource === 'AERODATABOX',
     },
   }));
 

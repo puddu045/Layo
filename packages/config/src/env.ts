@@ -19,10 +19,29 @@ const envSchema = z.object({
     .default('http://localhost:19006,http://localhost:3000,http://localhost:8081')
     .transform((v) => v.split(',').map((s) => s.trim()).filter(Boolean)),
 
-  FLIGHT_PROVIDER: z.enum(['mock', 'aviationstack']).default('mock'),
+  FLIGHT_PROVIDER: z.enum(['mock', 'aviationstack', 'aerodatabox']).default('mock'),
   AVIATIONSTACK_API_KEY: z.string().optional(),
   AVIATIONSTACK_BASE_URL: z.string().url().default('https://api.aviationstack.com/v1'),
   FLIGHT_CACHE_TTL_SECONDS: z.coerce.number().int().positive().default(900),
+
+  // AeroDataBox via RapidAPI — used for the airport-to-airport schedule search (not flight
+  // pricing/booking). The Basic/free RapidAPI plan caps usage at 400 "units"/month and 12 hours
+  // per schedule request, which is why this needs its own budget + cache rather than reusing the
+  // generic flight-lookup cache above as-is.
+  AERODATABOX_API_KEY: z.string().optional(),
+  AERODATABOX_API_HOST: z.string().default('aerodatabox.p.rapidapi.com'),
+  AERODATABOX_BASE_URL: z.string().url().default('https://aerodatabox.p.rapidapi.com'),
+  // Matches the RapidAPI Basic/free plan's monthly allowance by default — lower this if you're on
+  // an even more restricted plan, or raise it only if you've actually upgraded (this budget is
+  // enforced server-side and never bypassed automatically).
+  AERODATABOX_MONTHLY_UNIT_BUDGET: z.coerce.number().int().positive().default(400),
+  // RapidAPI doesn't expose a stable per-call unit cost in the free tier's response — this is a
+  // conservative, configurable estimate (1 request = 1 unit) used to track consumption locally.
+  // Adjust it if your own usage dashboard shows a different real cost per call.
+  AERODATABOX_UNITS_PER_CALL: z.coerce.number().int().positive().default(1),
+  // How long a cached per-airport/date departures search may be reused — AeroDataBox's free plan
+  // permits caching results for up to 7 days.
+  FLIGHT_SCHEDULE_CACHE_TTL_DAYS: z.coerce.number().int().positive().max(7).default(7),
 
   DISCOVERY_DEPARTURE_WINDOW_MINUTES_BEFORE: z.coerce
     .number()

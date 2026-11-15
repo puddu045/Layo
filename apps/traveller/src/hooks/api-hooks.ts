@@ -6,6 +6,8 @@ import type {
   DiscoverQuery,
   FlightLookupRequest,
   FlightLookupResponse,
+  FlightScheduleSearchRequest,
+  FlightScheduleSearchResponse,
   Journey,
   OwnProfile,
   PaginatedResponse,
@@ -98,6 +100,15 @@ export function useDeleteJourney() {
 export function useFlightLookup() {
   return useMutation({
     mutationFn: (dto: FlightLookupRequest) => api.post<FlightLookupResponse>('/flights/lookup', dto),
+  });
+}
+
+/** Airport-to-airport schedule search (departure + destination + date), distinct from
+ * `useFlightLookup` above (one already-known flight number). */
+export function useFlightScheduleSearch() {
+  return useMutation({
+    mutationFn: (dto: FlightScheduleSearchRequest) =>
+      api.post<FlightScheduleSearchResponse>('/flights/schedule-search', dto),
   });
 }
 

@@ -159,6 +159,7 @@ enum FlightStatus {
 enum FlightDataSource {
   MOCK
   AVIATIONSTACK
+  AERODATABOX
   MANUAL
 }
 
@@ -565,6 +566,44 @@ model FlightLookupFailure {
   createdAt     DateTime @default(now())
 
   @@index([createdAt])
+}
+
+/// Caches one airport's FULL set of scheduled departures for one local calendar date (every
+/// destination, not just whichever one a particular search asked for) — so a second search from
+/// the same airport+date with a *different* destination reuses this row instead of calling the
+/// provider again. Postgres rather than Redis specifically because `RedisService` is best-effort
+/// (never durable, see its own comment) and this cache's whole purpose is to avoid paying for
+/// the same AeroDataBox request twice within its permitted retention window.
+model FlightScheduleCache {
+  id                   String   @id @default(uuid())
+  departureAirportIata String
+  /// Local calendar date at the departure airport, YYYY-MM-DD.
+  date                 String
+  /// Normalized `FlightCandidate[]` for every destination from this airport on this date.
+  payload              Json
+  fetchedAt            DateTime @default(now())
+  /// `fetchedAt` + the configured retention (max 7 days on AeroDataBox's free plan) — checked at
+  /// read time rather than relying on a cron sweep, so a slow cleanup job never risks serving
+  /// data past what the provider's terms allow.
+  expiresAt            DateTime
+
+  @@unique([departureAirportIata, date])
+  @@index([expiresAt])
+}
+
+/// Durable monthly counter for external flight-data-provider usage, keyed by provider so more
+/// than one metered provider can be tracked independently. Deliberately a Postgres table, not a
+/// Redis counter — quota enforcement (stopping calls before the free plan's limit) has to survive
+/// a Redis restart/flush, since under-counting there would mean silently exceeding the quota.
+model ApiUsageCounter {
+  id         String   @id @default(uuid())
+  provider   String
+  /// Calendar month this counter applies to, YYYY-MM — resets naturally by just being a new row.
+  periodKey  String
+  unitsUsed  Int      @default(0)
+  updatedAt  DateTime @updatedAt
+
+  @@unique([provider, periodKey])
 }
 
 enum AnnouncementAudience {
