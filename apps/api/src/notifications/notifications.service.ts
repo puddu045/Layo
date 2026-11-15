@@ -174,6 +174,27 @@ export class NotificationsService {
       });
       if (!response.ok) {
         this.logger.warn(`Expo push API returned ${response.status} for user ${userId}`);
+        return;
+      }
+
+      // A non-2xx HTTP status only covers the request itself being malformed - Expo still
+      // returns 200 with one "ticket" per token, and each ticket carries its own status. A
+      // silent `DeviceNotRegistered` ticket (stale token - old install, cleared data, etc.) is
+      // exactly the kind of failure that looks identical to "nothing happened" from every other
+      // signal available here, so this is read and logged instead of only checking `response.ok`.
+      const body = (await response.json()) as { data?: { status: string; message?: string; details?: { error?: string } }[] };
+      const tickets = body.data ?? [];
+      const staleTokens: string[] = [];
+      tickets.forEach((ticket, i) => {
+        if (ticket.status !== 'error') return;
+        this.logger.warn(`Expo push ticket error for user ${userId}: ${ticket.details?.error ?? ticket.message}`);
+        if (ticket.details?.error === 'DeviceNotRegistered') {
+          const token = tokens[i]?.token;
+          if (token) staleTokens.push(token);
+        }
+      });
+      if (staleTokens.length > 0) {
+        await this.prisma.client.pushToken.deleteMany({ where: { token: { in: staleTokens } } });
       }
     } catch (err) {
       this.logger.warn(`Expo push delivery failed for user ${userId}: ${err instanceof Error ? err.message : err}`);
