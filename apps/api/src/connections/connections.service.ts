@@ -141,7 +141,7 @@ export class ConnectionsService {
       orderBy: { updatedAt: 'desc' },
     });
 
-    return Promise.all(rows.map((row) => this.toConnectionDto(row, userId)));
+    return this.toConnectionDtos(rows, userId);
   }
 
   /** Used by MessagingService to verify a user may read/send on a connection. */
@@ -170,22 +170,10 @@ export class ConnectionsService {
     return connection;
   }
 
-  private async toConnectionDto(
-    row: {
-      id: string;
-      status: string;
-      requesterId: string;
-      addresseeId: string;
-      createdAt: Date;
-      updatedAt: Date;
-      matchCategory?: string | null;
-      matchAirportIata?: string | null;
-      matchFlightNumber?: string | null;
-      matchOverlapStartUtc?: Date | null;
-      matchOverlapEndUtc?: Date | null;
-    },
-    viewerId: string,
-  ): Promise<Connection> {
+  /** Single-connection path — used by create/accept/decline/cancel, which only ever resolve the
+   * one connection they just touched, so a plain `Promise.all` of 4 queries here is fine (never
+   * more than 4 concurrent queries, nowhere near Supabase's session-pooler connection limit). */
+  private async toConnectionDto(row: ConnectionRow, viewerId: string): Promise<Connection> {
     const otherUserId = row.requesterId === viewerId ? row.addresseeId : row.requesterId;
 
     const [otherProfile, unreadCount, lastMessage, blockedByMe] = await Promise.all([
@@ -204,6 +192,75 @@ export class ConnectionsService {
       throw new NotFoundException('The other traveller in this connection no longer has a profile');
     }
 
+    return this.buildConnectionDto(row, viewerId, otherUserId, otherProfile, unreadCount, lastMessage, blockedByMe);
+  }
+
+  /** List path — resolves every connection with 4 queries TOTAL, not 4 per connection. The
+   * per-connection version above, run once per row via `Promise.all` (as this used to), fired
+   * `4 x connectionCount` concurrent queries for one `list()` call: confirmed in production to
+   * exhaust Supabase's session-pooler (a hard limit of 15 concurrent clients) for a user with
+   * more than a handful of connections, crashing with "max clients reached" and then connection
+   * timeouts — the exact same class of bug already fixed once in the AeroDataBox provider.
+   * Batching isn't just safer here, it's also just a better query plan regardless of the pool
+   * limit (classic N+1 avoidance). */
+  private async toConnectionDtos(rows: ConnectionRow[], viewerId: string): Promise<Connection[]> {
+    if (rows.length === 0) return [];
+
+    const otherUserIdByConnectionId = new Map(
+      rows.map((row) => [row.id, row.requesterId === viewerId ? row.addresseeId : row.requesterId]),
+    );
+    const otherUserIds = [...new Set(otherUserIdByConnectionId.values())];
+    const connectionIds = rows.map((row) => row.id);
+
+    const [profiles, unreadGroups, lastMessages, blocks] = await Promise.all([
+      this.prisma.client.profile.findMany({ where: { userId: { in: otherUserIds } } }),
+      this.prisma.client.message.groupBy({
+        by: ['connectionId'],
+        where: { connectionId: { in: connectionIds }, senderId: { not: viewerId }, readAt: null },
+        _count: { _all: true },
+      }),
+      // One row per connection — the most recent message in it — via `distinct`, not N separate
+      // `findFirst` calls.
+      this.prisma.client.message.findMany({
+        where: { connectionId: { in: connectionIds } },
+        orderBy: { createdAt: 'desc' },
+        distinct: ['connectionId'],
+      }),
+      this.prisma.client.block.findMany({ where: { blockerId: viewerId, blockedId: { in: otherUserIds } } }),
+    ]);
+
+    const profileByUserId = new Map(profiles.map((p) => [p.userId, p]));
+    const unreadByConnectionId = new Map(unreadGroups.map((g) => [g.connectionId, g._count._all]));
+    const lastMessageByConnectionId = new Map(lastMessages.map((m) => [m.connectionId, m]));
+    const blockedUserIds = new Set(blocks.map((b) => b.blockedId));
+
+    return rows.map((row) => {
+      const otherUserId = otherUserIdByConnectionId.get(row.id)!;
+      const otherProfile = profileByUserId.get(otherUserId);
+      if (!otherProfile) {
+        throw new NotFoundException('The other traveller in this connection no longer has a profile');
+      }
+      return this.buildConnectionDto(
+        row,
+        viewerId,
+        otherUserId,
+        otherProfile,
+        unreadByConnectionId.get(row.id) ?? 0,
+        lastMessageByConnectionId.get(row.id),
+        blockedUserIds.has(otherUserId),
+      );
+    });
+  }
+
+  private buildConnectionDto(
+    row: ConnectionRow,
+    viewerId: string,
+    otherUserId: string,
+    otherProfile: Parameters<typeof toPublicProfile>[0],
+    unreadCount: number,
+    lastMessage: { body: string; senderId: string; createdAt: Date } | null | undefined,
+    blockedByMe: boolean,
+  ): Connection {
     return {
       id: row.id,
       status: row.status as ConnectionStatus,
@@ -225,6 +282,20 @@ export class ConnectionsService {
       updatedAt: row.updatedAt.toISOString(),
     };
   }
+}
+
+interface ConnectionRow {
+  id: string;
+  status: string;
+  requesterId: string;
+  addresseeId: string;
+  createdAt: Date;
+  updatedAt: Date;
+  matchCategory?: string | null;
+  matchAirportIata?: string | null;
+  matchFlightNumber?: string | null;
+  matchOverlapStartUtc?: Date | null;
+  matchOverlapEndUtc?: Date | null;
 }
 
 /** `undefined` matchContext (no Discover card behind this request) must produce `{}`, not a set
