@@ -97,17 +97,12 @@ export class NotificationsService {
     // aggregate row above.
     const count = countByConnection[connectionId]!;
     const title = count > 1 ? `${fromUserDisplayName} (${count} new messages)` : fromUserDisplayName;
-    await this.sendExpoPush(userId, {
-      // Expo's Android implementation reads these three keys directly out of a data-only
-      // message's `data` map to build a real system notification (see `sendExpoPush`'s comment
-      // for the exact source) — title/message/tag, not the push API's own top-level fields.
+    await this.sendExpoPush(
+      userId,
       title,
-      message: previewsByConnection[connectionId]!.previews.join('\n'),
-      tag: `message-${connectionId}`,
-      channelId: 'default',
-      connectionId,
-      type: 'MESSAGE_NEW',
-    });
+      previewsByConnection[connectionId]!.previews.join('\n'),
+      { tag: `message-${connectionId}`, connectionId, type: 'MESSAGE_NEW' },
+    );
   }
 
   async list(userId: string, query: ListNotificationsQuery): Promise<NotificationPage> {
@@ -183,20 +178,27 @@ export class NotificationsService {
    * this was asked for. A delivery failure (bad/expired token, Expo's service down) never fails
    * the request that triggered it — the in-app notification already succeeded regardless.
    *
-   * Deliberately sends no top-level `title`/`body` on the push itself — this is a "data-only"
-   * FCM message, which matters because of how `expo-notifications`' own Android native code
-   * handles one (traced directly in `expo-notifications/android/.../RemoteNotificationContent.kt`
-   * + `NotificationData.kt`, since this isn't documented anywhere obvious): it still builds and
-   * displays a real system notification, reading `data.title` / `data.message` for the content
-   * and `data.tag` as the notification's native identifier — posting a second notification with
-   * the *same* tag replaces the first instead of stacking a new one, which is exactly the
-   * replace-in-place behaviour needed here, built into Android's own notification system rather
-   * than anything this app has to maintain. This path also runs through Google Play Services'
-   * own privileged delivery, independent of this app's JS ever executing — unlike an approach
-   * built on a client-side background task (tried first; didn't fire reliably once the app was
-   * actually killed, not just backgrounded), which needs the OS to wake the app's JS runtime
-   * first. `priority: 'high'` asks FCM to delay delivery as little as possible under Doze. */
-  private async sendExpoPush(userId: string, data: Record<string, unknown>): Promise<void> {
+   * Sends a real top-level `title`/`body`, not a "data-only" push — this used to be data-only
+   * specifically to make killed-app delivery more reliable, on the theory that Google Play
+   * Services' own privileged delivery path was more dependable than waking the app's JS runtime.
+   * That theory had a real gap: FCM only auto-displays a notification *without running any of the
+   * app's own code* when the payload has a `notification` field. A **data-only** message, whether
+   * the app is merely backgrounded or fully killed, still has to wake the app's own
+   * `FirebaseMessagingService` to process it — exactly the kind of wake-up aggressive OEM battery
+   * managers (and, confirmed in practice, even plain background state on some devices) block.
+   * Confirmed as a real regression: push stopped arriving in the background too after switching
+   * to data-only, which had worked before that change.
+   *
+   * A title+body+data push still carries `data` (tag/connectionId/type below) for the deep-link
+   * and replace-in-place behaviour — FCM attaches it as extras on the notification's own tap
+   * intent, delivered to the app on open, without requiring any code to run for display itself.
+   * `priority: 'high'` asks FCM to delay delivery as little as possible under Doze. */
+  private async sendExpoPush(
+    userId: string,
+    title: string,
+    body: string,
+    data: Record<string, unknown>,
+  ): Promise<void> {
     try {
       const tokens = await this.prisma.client.pushToken.findMany({ where: { userId }, select: { token: true } });
       if (tokens.length === 0) {
@@ -210,7 +212,9 @@ export class NotificationsService {
       const response = await fetch(EXPO_PUSH_API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify(tokens.map(({ token }) => ({ to: token, data, priority: 'high' }))),
+        body: JSON.stringify(
+          tokens.map(({ token }) => ({ to: token, title, body, channelId: 'default', data, priority: 'high' })),
+        ),
       });
       if (!response.ok) {
         this.logger.warn(`Expo push API returned ${response.status} for user ${userId}`);
