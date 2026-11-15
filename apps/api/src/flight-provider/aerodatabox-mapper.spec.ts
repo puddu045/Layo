@@ -50,9 +50,30 @@ describe('parseAeroDataBoxFlight', () => {
   });
 
   it('marks isCodeshare true only for an explicit codeshare status', () => {
-    expect(parseAeroDataBoxFlight(flightRecord({ codeshareStatus: 'IsCodeshare' }), '2026-06-01')!.isCodeshare).toBe(true);
+    // "IsCodeshared" (not "IsCodeshare") — confirmed against a real response.
+    expect(parseAeroDataBoxFlight(flightRecord({ codeshareStatus: 'IsCodeshared' }), '2026-06-01')!.isCodeshare).toBe(true);
     expect(parseAeroDataBoxFlight(flightRecord({ codeshareStatus: 'IsOperator' }), '2026-06-01')!.isCodeshare).toBe(false);
     expect(parseAeroDataBoxFlight(flightRecord({ codeshareStatus: undefined }), '2026-06-01')!.isCodeshare).toBe(false);
+  });
+
+  it('falls back to the known departure airport when the response omits it', () => {
+    // Confirmed against a real search: for a direction=Departure airport-schedule query,
+    // AeroDataBox omits `departure.airport` entirely (it's redundant with the airport you
+    // already queried by code) — without this fallback, every single result gets dropped.
+    const record = flightRecord();
+    delete record.departure!.airport;
+    expect(parseAeroDataBoxFlight(record, '2026-06-01')).toBeUndefined(); // no fallback given
+    expect(parseAeroDataBoxFlight(record, '2026-06-01', 'LHR')!.departure.iataCode).toBe('LHR');
+  });
+
+  it('normalizes the space AeroDataBox uses between date and time in scheduledTime.utc', () => {
+    // Confirmed against a real response: "2026-11-16 06:00Z", not "2026-11-16T06:00Z".
+    const record = flightRecord();
+    record.departure!.scheduledTime = { utc: '2026-06-01 21:00Z' };
+    record.arrival!.scheduledTime = { utc: '2026-06-02 04:30Z' };
+    const parsed = parseAeroDataBoxFlight(record, '2026-06-01')!;
+    expect(parsed.departure.scheduledUtc).toBe('2026-06-01T21:00Z');
+    expect(new Date(parsed.departure.scheduledUtc).toISOString()).toBe('2026-06-01T21:00:00.000Z');
   });
 
   it('drops a record with no arrival leg rather than inventing one', () => {

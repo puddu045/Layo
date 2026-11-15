@@ -96,24 +96,37 @@ export interface ParsedCandidate {
   arrival: ParsedLeg;
 }
 
-function parseLeg(movement: AeroDataBoxMovement | undefined): ParsedLeg | undefined {
+// Confirmed against a real response: AeroDataBox writes this as "2026-11-16 06:00Z" — a space,
+// not the "T" the ECMAScript Date parser's ISO format actually requires between date and time.
+// `Date`'s leniency with this varies by engine, so it's normalized explicitly rather than relied
+// on, same reasoning as never trusting an undocumented wire format to parse itself correctly.
+function normalizeUtc(utc: string): string {
+  return utc.includes('T') ? utc : utc.replace(' ', 'T');
+}
+
+/** `fallbackIataCode` covers the one real gap in AeroDataBox's airport-schedule endpoint: for a
+ * `direction=Departure` query, each result's own `departure.airport` is omitted entirely (it's
+ * redundant with the airport you already queried by code), so without this every departure would
+ * get silently dropped for "missing airport" — confirmed against a real response, not assumed. */
+function parseLeg(movement: AeroDataBoxMovement | undefined, fallbackIataCode?: string): ParsedLeg | undefined {
   const airport = movement?.airport;
+  const iataCode = airport?.iata ?? fallbackIataCode;
   const scheduledUtc = movement?.scheduledTime?.utc;
   // The IATA code and a UTC scheduled time are the two things this app cannot do without for a
   // leg — anything else missing (city, country, timezone) gets a placeholder below, same as
   // how the existing Aviationstack provider handles sparse airport metadata.
-  if (!airport?.iata || !scheduledUtc) return undefined;
+  if (!iataCode || !scheduledUtc) return undefined;
 
   return {
-    iataCode: airport.iata,
-    icaoCode: airport.icao,
-    name: airport.name ?? airport.iata,
-    city: airport.municipalityName ?? airport.name ?? airport.iata,
-    country: airport.countryCode ?? 'Unknown',
-    timezone: airport.timeZone,
-    latitude: airport.location?.lat,
-    longitude: airport.location?.lon,
-    scheduledUtc,
+    iataCode,
+    icaoCode: airport?.icao,
+    name: airport?.name ?? iataCode,
+    city: airport?.municipalityName ?? airport?.name ?? iataCode,
+    country: airport?.countryCode ?? 'Unknown',
+    timezone: airport?.timeZone,
+    latitude: airport?.location?.lat,
+    longitude: airport?.location?.lon,
+    scheduledUtc: normalizeUtc(scheduledUtc),
     terminal: movement?.terminal,
   };
 }
@@ -121,13 +134,15 @@ function parseLeg(movement: AeroDataBoxMovement | undefined): ParsedLeg | undefi
 /** Parses one flight record (from either the airport-schedule or by-number endpoint — they
  * share the same leg shape) into a `ParsedCandidate`, or `undefined` if it's missing anything
  * this app actually needs. `requestedDate` only feeds `providerRef`'s determinism (see below);
- * it never substitutes for a missing scheduled time. */
+ * it never substitutes for a missing scheduled time. `knownDepartureAirportIata` is only ever
+ * needed for an airport-schedule search — see `parseLeg`'s comment. */
 export function parseAeroDataBoxFlight(
   raw: AeroDataBoxAirportFlight,
   requestedDate: string,
+  knownDepartureAirportIata?: string,
 ): ParsedCandidate | undefined {
   if (!raw.number) return undefined;
-  const departure = parseLeg(raw.departure);
+  const departure = parseLeg(raw.departure, knownDepartureAirportIata);
   const arrival = parseLeg(raw.arrival);
   if (!departure || !arrival) return undefined;
 
@@ -145,7 +160,9 @@ export function parseAeroDataBoxFlight(
     // lookup and still match on `providerRef`, exactly like the mock/Aviationstack providers.
     providerRef: `aerodatabox:${flightNumber}:${requestedDate}`,
     flightNumber,
-    isCodeshare: raw.codeshareStatus === 'IsCodeshare',
+    // Confirmed against a real response: AeroDataBox spells this "IsCodeshared", not
+    // "IsCodeshare".
+    isCodeshare: raw.codeshareStatus === 'IsCodeshared',
     status: mapAeroDataBoxStatus(raw.status),
     airline: { iataCode: raw.airline?.iata, icaoCode: raw.airline?.icao, name: raw.airline?.name ?? raw.number },
     departure,

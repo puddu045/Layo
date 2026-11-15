@@ -77,7 +77,7 @@ export class AeroDataBoxFlightProvider implements IFlightProvider {
     }
 
     const parsed = rawFlights
-      .map((record) => parseAeroDataBoxFlight(record, date))
+      .map((record) => parseAeroDataBoxFlight(record, date, departureAirportIata))
       .filter((c): c is ParsedCandidate => c !== undefined);
     return Promise.all(parsed.map((p) => this.toCandidate(p)));
   }
