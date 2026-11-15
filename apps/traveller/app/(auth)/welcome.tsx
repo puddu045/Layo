@@ -452,19 +452,26 @@ const styles = StyleSheet.create({
   title: {
     fontFamily: fonts.wordmark,
     fontSize: 60,
-    lineHeight: 92,
-    paddingVertical: spacing.sm,
+    // Both bumped further still — the padding below was already sized generously for native's
+    // stricter clipping (see this style's own comment), but on an actual device the tail swash
+    // was still getting cut at the bottom-left, and the heart (positioned relative to this box,
+    // see wordmarkHeart below) was riding too high. react-native-web's text layout appears to be
+    // the most forgiving of the three renderers (web/iOS/Android) this font's overshoot has to
+    // clear, so "looked fine on web" wasn't proof it had enough room on native.
+    lineHeight: 100,
+    paddingVertical: spacing.md,
     // Horizontal, not just paddingLeft, so the box stays symmetric and the text doesn't visibly
     // shift off-centre under the window above it.
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.xl,
     color: colors.primaryDark,
   },
   // Tucked over the top-right of the "o", tilted like a quick hand-drawn flourish rather than a
-  // neatly placed icon.
+  // neatly placed icon. Offset down to match `title`'s increased paddingVertical above — this is
+  // positioned relative to the padded box, not the glyphs themselves, so it has to move with it.
   wordmarkHeart: {
     position: 'absolute',
-    top: 16,
-    right: 20,
+    top: 24,
+    right: 24,
     transform: [{ rotate: '18deg' }],
   },
   tagline: {

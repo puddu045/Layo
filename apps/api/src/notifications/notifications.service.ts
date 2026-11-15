@@ -40,8 +40,17 @@ export class NotificationsService {
    * up as 10 separate notifications). If an unread `MESSAGE_NEW` for this exact connection
    * already exists, this bumps it in place (new preview, incremented count, `createdAt` reset so
    * it resurfaces at the top) instead of inserting another row — one notification per
-   * conversation with unread messages, not one per message. */
-  async createOrBumpMessageNotification(userId: string, connectionId: string, fromUserId: string, preview: string): Promise<void> {
+   * conversation with unread messages, not one per message.
+   *
+   * Pushes on *every* message, not just the first unread one — see `sendExpoPush`'s own comment
+   * for why that's now safe to do without flooding the Android tray. */
+  async createOrBumpMessageNotification(
+    userId: string,
+    connectionId: string,
+    fromUserId: string,
+    fromUserDisplayName: string,
+    preview: string,
+  ): Promise<void> {
     const existing = await this.prisma.client.notification.findFirst({
       where: { userId, type: 'MESSAGE_NEW', readAt: null, payload: { path: ['connectionId'], equals: connectionId } },
     });
@@ -50,24 +59,14 @@ export class NotificationsService {
     const row = existing
       ? await this.prisma.client.notification.update({
           where: { id: existing.id },
-          data: { createdAt: new Date(), payload: { connectionId, fromUserId, preview, count } },
+          data: { createdAt: new Date(), payload: { connectionId, fromUserId, fromUserDisplayName, preview, count } },
         })
       : await this.prisma.client.notification.create({
-          data: { userId, type: 'MESSAGE_NEW', payload: { connectionId, fromUserId, preview, count } },
+          data: { userId, type: 'MESSAGE_NEW', payload: { connectionId, fromUserId, fromUserDisplayName, preview, count } },
         });
 
     this.gateway.emitToUser(userId, socketEvents.NOTIFICATION_NEW, this.toNotification(row));
-
-    // OS push only on the *first* unread message in a conversation, not every one after it —
-    // Expo's push API has no Android notification-tag/replace mechanism (nothing tells the tray
-    // two pushes are "the same conversation, just updated"), so every push shows as its own
-    // separate entry there regardless of this row being bumped in place above. Sending one only
-    // when `!existing` means a burst of messages produces one push, the same way the in-app bell
-    // already shows one bumped row instead of several — opening the app surfaces whatever piled
-    // up since, same as any other messaging app's "no answer for every new text" behaviour.
-    if (!existing) {
-      await this.sendExpoPush(userId, 'New message', preview, { connectionId, type: 'MESSAGE_NEW' });
-    }
+    await this.sendExpoPush(userId, { connectionId, type: 'MESSAGE_NEW', senderName: fromUserDisplayName, preview, count });
   }
 
   async list(userId: string, query: ListNotificationsQuery): Promise<NotificationPage> {
@@ -127,10 +126,20 @@ export class NotificationsService {
   /** Best-effort OS push for scenarios the recipient's device can't show any other way — the
    * socket emit above only updates the app while it's actually open and connected. Scoped to
    * message notifications only for now (not every notification type), since that's the one
-   * this was asked for and every other type would need its own title/body copy to push
-   * sensibly. A delivery failure (bad/expired token, Expo's service down) never fails the
-   * request that triggered it — the in-app notification already succeeded regardless. */
-  private async sendExpoPush(userId: string, title: string, body: string, data: Record<string, unknown>): Promise<void> {
+   * this was asked for. A delivery failure (bad/expired token, Expo's service down) never fails
+   * the request that triggered it — the in-app notification already succeeded regardless.
+   *
+   * Deliberately sends *no* `title`/`body` at the top level — everything the client needs to
+   * show (and update) a notification travels in `data` instead. Expo's push API doesn't expose
+   * Android's native notification-tag/replace mechanism, so a push built with top-level
+   * title/body gets auto-displayed by the OS with a new, unrelated tray entry every time —
+   * exactly the "ten messages, ten notifications" bug this replaced. The client's background
+   * task (`registerTaskAsync` in `push-notification-hooks.ts`) reads this `data` payload and
+   * calls `scheduleNotificationAsync` with an `identifier` derived from `connectionId`, so a
+   * second call for the same conversation *replaces* the first tray entry instead of stacking a
+   * new one — the actual fix, not just sending fewer pushes. `priority: 'high'` asks FCM to
+   * delay delivery as little as possible even while the device is in Doze. */
+  private async sendExpoPush(userId: string, data: Record<string, unknown>): Promise<void> {
     try {
       const tokens = await this.prisma.client.pushToken.findMany({ where: { userId }, select: { token: true } });
       if (tokens.length === 0) return;
@@ -138,9 +147,7 @@ export class NotificationsService {
       const response = await fetch(EXPO_PUSH_API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify(
-          tokens.map(({ token }) => ({ to: token, title, body, data, sound: 'default', channelId: 'default' })),
-        ),
+        body: JSON.stringify(tokens.map(({ token }) => ({ to: token, data, priority: 'high' }))),
       });
       if (!response.ok) {
         this.logger.warn(`Expo push API returned ${response.status} for user ${userId}`);

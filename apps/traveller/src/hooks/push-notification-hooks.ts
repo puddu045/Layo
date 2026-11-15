@@ -6,6 +6,7 @@ import Constants from 'expo-constants';
 import { router } from 'expo-router';
 import { useAuth } from '../lib/auth-context';
 import { api } from '../lib/api-client';
+import { BACKGROUND_NOTIFICATION_TASK } from '../lib/background-notifications';
 
 // Without this, Android/iOS silently drop a notification that arrives while the app is in the
 // foreground — this app wants it shown even then, for whichever conversation *isn't* the one
@@ -29,6 +30,14 @@ Notifications.setNotificationHandler({
 export function usePushNotifications() {
   const { session } = useAuth();
   const registeredTokenRef = useRef<string | undefined>(undefined);
+
+  // Once per app launch, independent of sign-in state — this just tells the OS which task to
+  // run when a push arrives in the background/killed, so it should be ready before anything
+  // could possibly arrive, not gated behind the sign-in effect below.
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    Notifications.registerTaskAsync(BACKGROUND_NOTIFICATION_TASK).catch(() => {});
+  }, []);
 
   useEffect(() => {
     // No device push on web, and simulators/emulators can't receive real push either.
@@ -67,7 +76,14 @@ export function usePushNotifications() {
         api.delete('/push-tokens', { token }).catch(() => {});
       }
     };
-  }, [session]);
+    // Deliberately `session?.user.id`, not `session` — Supabase hands out a brand new session
+    // object on every silent token refresh (roughly hourly), which is a different reference but
+    // the same signed-in user. Depending on the whole object re-ran this effect every refresh:
+    // unregister-then-reregister the same token, racing two in-flight requests against each
+    // other with no ordering guarantee — occasionally the delete could land *after* the new
+    // registration and leave this device with no push token at all until the next refresh. This
+    // only needs to react to the user actually changing (sign in, sign out, switch accounts).
+  }, [session?.user.id]);
 
   useEffect(() => {
     const subscription = Notifications.addNotificationResponseReceivedListener((response) => {

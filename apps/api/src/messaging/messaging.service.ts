@@ -78,10 +78,15 @@ export class MessagingService {
     // notifies normally, since this check is scoped to this one connectionId.
     const recipientIsActive = await this.gateway.isUserActiveInChat(otherUserId, connectionId);
     if (!recipientIsActive) {
+      const senderProfile = await this.prisma.client.profile.findUnique({
+        where: { userId },
+        select: { displayName: true },
+      });
       await this.notificationsService.createOrBumpMessageNotification(
         otherUserId,
         connectionId,
         userId,
+        senderProfile?.displayName ?? 'Someone',
         dto.body.slice(0, 120),
       );
     }
