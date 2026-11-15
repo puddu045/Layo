@@ -101,7 +101,8 @@ export class NotificationsService {
       userId,
       title,
       previewsByConnection[connectionId]!.previews.join('\n'),
-      { tag: `message-${connectionId}`, connectionId, type: 'MESSAGE_NEW' },
+      `message-${connectionId}`,
+      { connectionId, type: 'MESSAGE_NEW' },
     );
   }
 
@@ -189,14 +190,22 @@ export class NotificationsService {
    * Confirmed as a real regression: push stopped arriving in the background too after switching
    * to data-only, which had worked before that change.
    *
-   * A title+body+data push still carries `data` (tag/connectionId/type below) for the deep-link
-   * and replace-in-place behaviour — FCM attaches it as extras on the notification's own tap
-   * intent, delivered to the app on open, without requiring any code to run for display itself.
+   * `tag` is Expo's own top-level field (Android only) — maps directly to FCM's native
+   * `notification.tag`, which is what the OS itself reads to replace an already-shown
+   * notification in place, independent of any app code ever running. This is NOT the same as
+   * putting a `tag` inside `data`: that only worked for the previous data-only approach, where
+   * `expo-notifications`' own JS/native code was the thing reading `data.tag` — which never runs
+   * at all for a title+body push once the OS auto-displays it directly in the background/killed
+   * state. Confirmed in production: with `tag` left inside `data`, every message stacked a brand
+   * new notification instead of replacing the previous one, since nothing ever read that field.
+   * `data` here is now just for the deep-link (`connectionId`/`type`), delivered as extras on the
+   * notification's tap intent, not anything the OS needs for display or replacement.
    * `priority: 'high'` asks FCM to delay delivery as little as possible under Doze. */
   private async sendExpoPush(
     userId: string,
     title: string,
     body: string,
+    tag: string,
     data: Record<string, unknown>,
   ): Promise<void> {
     try {
@@ -213,7 +222,7 @@ export class NotificationsService {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
         body: JSON.stringify(
-          tokens.map(({ token }) => ({ to: token, title, body, channelId: 'default', data, priority: 'high' })),
+          tokens.map(({ token }) => ({ to: token, title, body, channelId: 'default', tag, data, priority: 'high' })),
         ),
       });
       if (!response.ok) {
