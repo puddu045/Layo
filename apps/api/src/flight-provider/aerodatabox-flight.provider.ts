@@ -85,18 +85,50 @@ export class AeroDataBoxFlightProvider implements IFlightProvider {
     return this.toCandidates(parsed);
   }
 
-  /** Sequential, not `Promise.all` — a schedule search can return dozens of records, and each
-   * one resolves to 3 database queries (`ensureAirport` x2, `ensureAirline`). Firing all of them
-   * at once overwhelmed Supabase's session-mode pooler (a hard limit of 15 concurrent clients)
-   * and crashed the whole request with connection-pool timeouts in production. A few dozen
-   * sequential upserts (most of which just hit an existing row) is fast enough that trading away
-   * that parallelism costs nothing noticeable here. */
+  /** Resolves every airport/airline exactly once, not once per candidate. A full day's schedule
+   * at a busy airport has massive repetition — dozens of flights can share the same destination
+   * (confirmed in production: ~30 separate LHR departures all going to NCL on one day) — so
+   * looping `toCandidate` per record was both the cause of the connection-pool crash (up to 3
+   * concurrent DB queries per record, fired for every record at once) and, even serialized one at
+   * a time, redundant: the same airport/airline got upserted dozens of times over for no reason.
+   * Deduplicating first turns "flights x 3 queries" into "unique airports + unique airlines"
+   * queries — for a busy hub that's usually a handful of dozens, not low hundreds — run
+   * sequentially to stay well under Supabase's session-pooler connection limit. */
   private async toCandidates(parsed: ParsedCandidate[]): Promise<FlightCandidate[]> {
-    const candidates: FlightCandidate[] = [];
+    const legsByIata = new Map<string, ParsedLeg>();
+    const airlinesByIata = new Map<string, { iataCode?: string; icaoCode?: string; name: string }>();
     for (const p of parsed) {
-      candidates.push(await this.toCandidate(p));
+      legsByIata.set(p.departure.iataCode, p.departure);
+      legsByIata.set(p.arrival.iataCode, p.arrival);
+      if (p.airline.iataCode) airlinesByIata.set(p.airline.iataCode, p.airline);
     }
-    return candidates;
+
+    const airportsByIata = new Map<string, Airport>();
+    for (const leg of legsByIata.values()) {
+      airportsByIata.set(leg.iataCode, await this.ensureAirport(leg));
+    }
+    const resolvedAirlinesByIata = new Map<string, Airline>();
+    for (const airline of airlinesByIata.values()) {
+      resolvedAirlinesByIata.set(airline.iataCode!, await this.ensureAirline(airline));
+    }
+
+    return parsed.map((p) => ({
+      providerRef: p.providerRef,
+      airline: p.airline.iataCode
+        ? resolvedAirlinesByIata.get(p.airline.iataCode)!
+        : { iataCode: 'XX', name: p.airline.name },
+      flightNumber: p.flightNumber,
+      operatingFlightNumber: undefined,
+      departureAirport: airportsByIata.get(p.departure.iataCode)!,
+      arrivalAirport: airportsByIata.get(p.arrival.iataCode)!,
+      scheduledDepartureUtc: new Date(p.departure.scheduledUtc).toISOString(),
+      scheduledArrivalUtc: new Date(p.arrival.scheduledUtc).toISOString(),
+      departureTerminal: p.departure.terminal,
+      arrivalTerminal: p.arrival.terminal,
+      status: p.status,
+      dataSource: 'AERODATABOX',
+      isCodeshare: p.isCodeshare,
+    }));
   }
 
   private requireConfig() {
@@ -153,40 +185,15 @@ export class AeroDataBoxFlightProvider implements IFlightProvider {
     }
   }
 
-  private async toCandidate(parsed: ParsedCandidate): Promise<FlightCandidate> {
-    const [departureAirport, arrivalAirport, airline] = await Promise.all([
-      this.ensureAirport(parsed.departure),
-      this.ensureAirport(parsed.arrival),
-      this.ensureAirline(parsed.airline),
-    ]);
-
-    return {
-      providerRef: parsed.providerRef,
-      airline,
-      flightNumber: parsed.flightNumber,
-      operatingFlightNumber: undefined,
-      departureAirport,
-      arrivalAirport,
-      scheduledDepartureUtc: new Date(parsed.departure.scheduledUtc).toISOString(),
-      scheduledArrivalUtc: new Date(parsed.arrival.scheduledUtc).toISOString(),
-      departureTerminal: parsed.departure.terminal,
-      arrivalTerminal: parsed.arrival.terminal,
-      status: parsed.status,
-      dataSource: 'AERODATABOX',
-      isCodeshare: parsed.isCodeshare,
-    };
-  }
-
   /** Same "create a reference row if we've never seen this airport before" approach as the
    * Aviationstack provider — but AeroDataBox actually gives us a real IANA timezone, so there's
    * no need for its "default to UTC and let an admin fix it later" fallback.
    *
-   * `upsert`, not `findUnique` then `create`: `searchDepartures` can return dozens of records
-   * that share the same new destination airport, all resolved concurrently via `Promise.all` in
-   * `searchDepartures`/`lookup` above — two concurrent "doesn't exist yet" checks for the same
-   * airport would otherwise both proceed to `create`, and the second hits Postgres's unique
-   * constraint on `iataCode` and throws, crashing the whole request with a 500 instead of one of
-   * them just winning. `upsert` lets Postgres resolve that race atomically. */
+   * `upsert`, not `findUnique` then `create`: two overlapping searches (e.g. two users searching
+   * the same new airport at once) could otherwise both see "doesn't exist yet" and both proceed
+   * to `create`, and the second hits Postgres's unique constraint on `iataCode` and throws.
+   * `upsert` lets Postgres resolve that race atomically instead. Called at most once per unique
+   * airport per search — see `toCandidates`. */
   private async ensureAirport(leg: ParsedLeg): Promise<Airport> {
     const airport = await this.prisma.client.airport.upsert({
       where: { iataCode: leg.iataCode },
