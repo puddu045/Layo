@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import type { Connection } from '@layo/contracts';
 import { ScreenContainer } from '../../src/components/ScreenContainer';
 import { Avatar } from '../../src/components/Avatar';
@@ -30,8 +30,16 @@ function formatTime(iso: string): string {
 
 export default function Chats() {
   useRealtimeMessages();
-  const [tab, setTab] = useState<Tab>('messages');
+  // Lets a notification (or any other screen) land directly on the Requests tab, e.g.
+  // `/(tabs)/chats?tab=requests` for a connection request — without this, arriving here always
+  // opened on Messages and made the user toggle over themselves.
+  const params = useLocalSearchParams<{ tab?: string }>();
+  const [tab, setTab] = useState<Tab>(params.tab === 'requests' ? 'requests' : 'messages');
   const [previewConnection, setPreviewConnection] = useState<Connection | undefined>();
+
+  useEffect(() => {
+    if (params.tab === 'requests') setTab('requests');
+  }, [params.tab]);
 
   const connections = useConnections();
   const acceptConnection = useAcceptConnection();

@@ -30,7 +30,7 @@ function describe(n: Notification): { title: string; body: string; onPress?: () 
       return {
         title: `${fromName} sent you a connection request`,
         body: 'Check your Chats tab to accept or decline.',
-        onPress: () => router.push('/(tabs)/chats'),
+        onPress: () => router.push('/(tabs)/chats?tab=requests'),
       };
     }
     case 'CONNECTION_ACCEPTED': {
@@ -91,16 +91,18 @@ export default function Notifications() {
   const markRead = useMarkNotificationRead();
   const markAllRead = useMarkAllNotificationsRead();
 
-  const items = notifications.data?.pages.flatMap((page) => page.items) ?? [];
-  const hasUnread = items.some((n) => !n.readAt);
+  // Reading a notification here is how it's "cleared" — tapping it marks it read (see
+  // useMarkNotificationRead's optimistic update) and it drops out of this unread-only list
+  // immediately, rather than staying around dimmed.
+  const items = (notifications.data?.pages.flatMap((page) => page.items) ?? []).filter((n) => !n.readAt);
 
   return (
     <ScreenContainer>
       <View style={styles.header}>
         <Text style={styles.title}>Notifications</Text>
-        {hasUnread && (
+        {items.length > 0 && (
           <Pressable onPress={() => markAllRead.mutate()} hitSlop={8}>
-            <Text style={styles.markAll}>Mark all read</Text>
+            <Text style={styles.markAll}>Clear all</Text>
           </Pressable>
         )}
       </View>
@@ -122,10 +124,10 @@ export default function Notifications() {
           {items.map((n) => {
             const { title, body, onPress } = describe(n);
             const card = (
-              <Card style={[styles.card, n.readAt && styles.cardRead]}>
+              <Card style={styles.card}>
                 <View style={styles.cardTop}>
                   <Text style={styles.cardTitle}>{title}</Text>
-                  {!n.readAt && <View style={styles.dot} />}
+                  <View style={styles.dot} />
                 </View>
                 {body ? <Text style={styles.cardBody}>{body}</Text> : null}
                 <Text style={styles.cardWhen}>{formatWhen(n.createdAt)}</Text>
@@ -135,7 +137,7 @@ export default function Notifications() {
               <Pressable
                 key={n.id}
                 onPress={() => {
-                  if (!n.readAt) markRead.mutate(n.id);
+                  markRead.mutate(n.id);
                   onPress?.();
                 }}
               >
@@ -168,7 +170,6 @@ const styles = StyleSheet.create({
   title: { ...typography.display, color: colors.navy900 },
   markAll: { ...typography.caption, color: colors.primary, fontWeight: '600' },
   card: { marginBottom: spacing.sm },
-  cardRead: { opacity: 0.6 },
   cardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   cardTitle: { ...typography.subtitle, color: colors.textPrimary, flex: 1 },
   dot: { width: 8, height: 8, borderRadius: radius.sm, backgroundColor: colors.primary },
