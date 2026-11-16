@@ -47,6 +47,10 @@ export default function UserDetailPage() {
 
   if (!user) return <p className="text-sm text-slate-400">Loading…</p>;
 
+  // A Super Admin account can't be suspended, banned, or deleted (see `UsersService`'s matching
+  // guard) — hiding these here instead of just letting the click 400 is the actual UX fix.
+  const isSuperAdminTarget = user.adminRole === 'SUPER_ADMIN';
+
   return (
     <div>
       <button onClick={() => router.push('/dashboard/users')} className="mb-4 text-sm text-slate-500 hover:text-navy-900">
@@ -80,7 +84,7 @@ export default function UserDetailPage() {
           <div className="flex flex-wrap gap-2">
             <ActionButton label="Warn" onClick={() => act('warn')} disabled={acting} />
             {!user.verifiedAt && <ActionButton label="Verify" onClick={() => act('verify')} disabled={acting} />}
-            {user.status === 'ACTIVE' && (
+            {user.status === 'ACTIVE' && !isSuperAdminTarget && (
               <>
                 <ActionButton label="Suspend" danger onClick={() => act('suspend', 'Suspend this account? They will be signed out immediately.')} disabled={acting} />
                 <ActionButton
@@ -94,7 +98,7 @@ export default function UserDetailPage() {
             {user.status === 'SUSPENDED' && (
               <ActionButton label="Reinstate" onClick={() => act('reinstate')} disabled={acting} />
             )}
-            {user.status !== 'DELETED' && (
+            {user.status !== 'DELETED' && !isSuperAdminTarget && (
               <ActionButton
                 label="Delete profile completely"
                 danger
@@ -107,7 +111,7 @@ export default function UserDetailPage() {
                 disabled={acting}
               />
             )}
-            {me?.adminRole === 'SUPER_ADMIN' && (
+            {me?.adminRole === 'SUPER_ADMIN' && !isSuperAdminTarget && (
               <ActionButton
                 label="Hard delete account"
                 danger
@@ -121,7 +125,13 @@ export default function UserDetailPage() {
               />
             )}
           </div>
-          {me?.adminRole === 'SUPER_ADMIN' && (
+          {isSuperAdminTarget && (
+            <p className="mt-2 text-xs text-slate-400">
+              This is a Super Admin account — it can&rsquo;t be suspended, banned, or deleted. Remove their Super
+              Admin role from the Admins page first if that&rsquo;s really intended.
+            </p>
+          )}
+          {!isSuperAdminTarget && me?.adminRole === 'SUPER_ADMIN' && (
             <p className="mt-2 text-xs text-slate-400">
               &ldquo;Delete profile completely&rdquo; scrubs and locks the account but keeps the row. &ldquo;Hard delete
               account&rdquo; removes it everywhere, including Supabase Auth — use this when the email needs to be free

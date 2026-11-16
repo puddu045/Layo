@@ -212,6 +212,14 @@ export class UsersService {
     const user = await this.prisma.client.user.findUnique({ where: { id: userId } });
     if (!user) throw new NotFoundException('User not found');
 
+    // A Super Admin is the account that can undo every other moderation action — losing access
+    // to it (by suspension, ban, or the anonymizing soft-delete) has no recovery path short of
+    // direct DB access, unlike every other user. WARN/VERIFY don't touch access, and REINSTATE
+    // only ever restores it, so those stay allowed.
+    if ((action === 'SUSPEND' || action === 'BAN' || action === 'DELETE') && user.adminRole === 'SUPER_ADMIN') {
+      throw new BadRequestException('A Super Admin account cannot be suspended, banned, or deleted');
+    }
+
     switch (action) {
       case 'WARN':
         await this.notificationsService.create(userId, 'REPORT_WARNING', { reason });
@@ -286,6 +294,12 @@ export class UsersService {
   async hardDelete(adminId: string, userId: string, reason?: string): Promise<void> {
     const user = await this.prisma.client.user.findUnique({ where: { id: userId } });
     if (!user) throw new NotFoundException('User not found');
+
+    // Same reasoning as the SUSPEND/BAN/DELETE guard in `applyModerationAction` — a Super Admin
+    // is who could otherwise undo a mistake here, and this one is actually irreversible.
+    if (user.adminRole === 'SUPER_ADMIN') {
+      throw new BadRequestException('A Super Admin account cannot be deleted — remove their Super Admin role first if this is really intended');
+    }
 
     // Nulls out the attribution rather than letting the foreign key on AuditLog.actorAdminId
     // block the delete outright — only matters if this user ever acted as an admin themselves,
