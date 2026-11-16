@@ -57,7 +57,7 @@ export const gradients = {
   // The plane's window "sky", inside the cabin-window mark — kept blue regardless of the app's
   // own peach wash, since it's meant to read as sky glimpsed through a window, not the page
   // background.
-  hero: ['#A9D6F5', '#D7ECFB', '#EFF7FF'] as const,
+  hero: ['#5BAEEA', '#A9D6F5', '#E3F2FC'] as const,
 
   primaryButton: ['#3E8FD6', '#2878C7'] as const,
 
