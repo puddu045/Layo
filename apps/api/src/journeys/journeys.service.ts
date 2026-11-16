@@ -1,4 +1,6 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { DateTime } from 'luxon';
+import { loadApiEnv } from '@layo/config';
 import { computeCanonicalFlightKey, FlightDataSource, FlightStatus } from '@layo/db';
 import type {
   AddJourneySegmentRequest,
@@ -8,18 +10,27 @@ import type {
   FlightCandidate,
   Journey,
   ListAdminJourneysQuery,
+  Match,
   PaginatedResponse,
   UpdateJourneyRequest,
 } from '@layo/contracts';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { FlightsService } from '../flights/flights.service';
+import { MessagingService } from '../messaging/messaging.service';
+import { computeMatches } from '../matching/matching.algorithm';
+import { computePresenceWindows, type PresenceSegmentInput } from '../matching/presence.util';
 import { computeLayovers } from './layover.util';
 
-/** A persisted `Flight` row's id plus just enough to sort segments chronologically — see
- * `createJourney`'s sort, the reason this is returned instead of a bare id. */
+/** A persisted `Flight` row's id plus everything `createJourney` needs beyond that: the
+ * departure time, to sort segments chronologically, and the rest, to check this journey's
+ * flights against an accepted connection's own journeys for `notifyConnectedTravelOverlaps`. */
 interface ResolvedFlight {
   id: string;
+  flightNumber: string;
+  departureAirportIata: string;
+  arrivalAirportIata: string;
   scheduledDepartureUtc: Date;
+  scheduledArrivalUtc: Date;
 }
 
 @Injectable()
@@ -27,6 +38,7 @@ export class JourneysService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly flightsService: FlightsService,
+    private readonly messagingService: MessagingService,
   ) {}
 
   async createJourney(userId: string, dto: CreateJourneyRequest): Promise<Journey> {
@@ -34,6 +46,13 @@ export class JourneysService {
     for (const segment of dto.segments) {
       resolvedFlights.push(await this.resolveFlightForSegment(segment));
     }
+
+    // Same set of flights as a journey this user already has (order doesn't matter — the sort
+    // below is what actually decides order) is someone re-adding a trip they already logged,
+    // confirmed in production as the direct result of the sequence bug above: before that fix,
+    // the same two flights entered in a different order looked like two different journeys and
+    // both got created.
+    await this.rejectIfDuplicate(userId, resolvedFlights);
 
     // `sequence` reflects when each flight actually departs, not the order the segments arrived
     // in on the request — a journey built by adding its later leg first (confirmed in production:
@@ -56,6 +75,7 @@ export class JourneysService {
     });
 
     await this.ensureAirportRooms(resolvedFlights.map((f) => f.id));
+    await this.notifyConnectedTravelOverlaps(userId, sorted);
 
     return this.getJourney(userId, journey.id);
   }
@@ -155,7 +175,14 @@ export class JourneysService {
         status: toFlightStatus(candidate.status),
       },
     });
-    return { id: flight.id, scheduledDepartureUtc: flight.scheduledDepartureUtc };
+    return {
+      id: flight.id,
+      flightNumber: flight.flightNumber,
+      departureAirportIata: flight.departureAirportIata,
+      arrivalAirportIata: flight.arrivalAirportIata,
+      scheduledDepartureUtc: flight.scheduledDepartureUtc,
+      scheduledArrivalUtc: flight.scheduledArrivalUtc,
+    };
   }
 
   private async upsertManualFlight(entry: AddJourneySegmentRequest['manualEntry']): Promise<ResolvedFlight> {
@@ -196,7 +223,125 @@ export class JourneysService {
       },
       update: {},
     });
-    return { id: flight.id, scheduledDepartureUtc: flight.scheduledDepartureUtc };
+    return {
+      id: flight.id,
+      flightNumber: flight.flightNumber,
+      departureAirportIata: flight.departureAirportIata,
+      arrivalAirportIata: flight.arrivalAirportIata,
+      scheduledDepartureUtc: flight.scheduledDepartureUtc,
+      scheduledArrivalUtc: flight.scheduledArrivalUtc,
+    };
+  }
+
+  /** Blocks re-adding a trip the user already has logged — same set of flights as an existing
+   * journey of theirs, regardless of order (the sort above is what decides order, not which
+   * journey it ends up in). */
+  private async rejectIfDuplicate(userId: string, resolvedFlights: ResolvedFlight[]): Promise<void> {
+    const flightIds = new Set(resolvedFlights.map((f) => f.id));
+    const existingJourneys = await this.prisma.client.journey.findMany({
+      where: { userId },
+      select: { segments: { select: { flightId: true } } },
+    });
+
+    const isDuplicate = existingJourneys.some((journey) => {
+      const existingIds = journey.segments.map((s) => s.flightId);
+      return existingIds.length === flightIds.size && existingIds.every((id) => flightIds.has(id));
+    });
+    if (isDuplicate) {
+      throw new ConflictException("You've already added this exact journey.");
+    }
+  }
+
+  /** Tells each of `userId`'s accepted connections, via a system message in their shared chat,
+   * when the journey just created overlaps with one of THEIRS — the same flight, or the same
+   * departure/layover airport around the same time, using the identical overlap logic Discover
+   * runs for strangers (`computeMatches`), just against this one already-connected person
+   * instead of a pool of candidates. Deliberately independent of Discover's own "matching
+   * enabled" admin toggle and its tunable thresholds — this is "tell my friend we're travelling
+   * together again", not stranger discovery, so it always runs, using the same baseline
+   * thresholds Discover falls back to with no admin override. */
+  private async notifyConnectedTravelOverlaps(userId: string, newFlights: ResolvedFlight[]): Promise<void> {
+    const connections = await this.prisma.client.connection.findMany({
+      where: { status: 'ACCEPTED', OR: [{ requesterId: userId }, { addresseeId: userId }] },
+    });
+    if (connections.length === 0) return;
+
+    const env = loadApiEnv();
+    // `MatchingConfig`'s airport-room fields aren't read by `computeMatches`/`computePresenceWindows`
+    // — they're only here because the type bundles them for an unrelated feature (airport-room
+    // access windows) — included for a complete, accurate `MatchingConfig` rather than faking them.
+    const config = {
+      departureAirportWindowMinutesBefore: env.DISCOVERY_DEPARTURE_WINDOW_MINUTES_BEFORE,
+      departureAirportWindowMinutesAfter: env.DISCOVERY_DEPARTURE_WINDOW_MINUTES_AFTER,
+      minAirportOverlapMinutes: env.DISCOVERY_MIN_AIRPORT_OVERLAP_MINUTES,
+      airportRoomAccessWindowHoursBefore: env.AIRPORT_ROOM_ACCESS_WINDOW_HOURS_BEFORE,
+      airportRoomAccessWindowHoursAfter: env.AIRPORT_ROOM_ACCESS_WINDOW_HOURS_AFTER,
+    };
+    const newSegments: PresenceSegmentInput[] = newFlights.map((f, index) => ({
+      sequence: index + 1,
+      flightId: f.id,
+      flightNumber: f.flightNumber,
+      departureAirportIata: f.departureAirportIata,
+      arrivalAirportIata: f.arrivalAirportIata,
+      scheduledDepartureUtc: f.scheduledDepartureUtc,
+      scheduledArrivalUtc: f.scheduledArrivalUtc,
+    }));
+    const requesterWindows = computePresenceWindows(newSegments, config);
+    const requesterFlightIds = new Set(newFlights.map((f) => f.id));
+    const now = new Date();
+
+    // The airport timezones this journey's own legs touch — every airport `computeMatches`
+    // could possibly name back (a departure/layover window's airport, or a shared flight's own
+    // departure airport) is one of these, so one small upfront query covers every case below
+    // instead of a lookup per connection.
+    const airportCodes = [...new Set(newFlights.flatMap((f) => [f.departureAirportIata, f.arrivalAirportIata]))];
+    const airports = await this.prisma.client.airport.findMany({ where: { iataCode: { in: airportCodes } } });
+    const timezoneByIata = new Map(airports.map((a) => [a.iataCode, a.timezone]));
+
+    for (const connection of connections) {
+      const friendId = connection.requesterId === userId ? connection.addresseeId : connection.requesterId;
+
+      const friendJourneys = await this.prisma.client.journey.findMany({
+        where: { userId: friendId },
+        include: { segments: { include: { flight: true }, orderBy: { sequence: 'asc' } } },
+      });
+      if (friendJourneys.length === 0) continue;
+
+      const friendSegments: PresenceSegmentInput[] = friendJourneys.flatMap((journey) =>
+        journey.segments.map((s) => ({
+          sequence: s.sequence,
+          flightId: s.flightId,
+          flightNumber: s.flight.flightNumber,
+          departureAirportIata: s.flight.departureAirportIata,
+          arrivalAirportIata: s.flight.arrivalAirportIata,
+          scheduledDepartureUtc: s.flight.scheduledDepartureUtc,
+          scheduledArrivalUtc: s.flight.scheduledArrivalUtc,
+        })),
+      );
+
+      const matches = computeMatches({
+        requesterWindows,
+        requesterFlightIds,
+        // `profile` is never read by `computeMatches` for the overlap math itself, only carried
+        // through onto its output `Match` — which this never returns, so a stub is fine here.
+        candidates: [
+          {
+            userId: friendId,
+            profile: { userId: friendId, displayName: '', bio: '', interests: [], languages: [] },
+            segments: friendSegments,
+            connectionStatus: 'ACCEPTED',
+          },
+        ],
+        config,
+        now,
+      });
+
+      const match = matches[0];
+      if (!match) continue;
+
+      const body = describeTravelOverlap(match, newSegments, timezoneByIata);
+      await this.messagingService.createSystemMessage(connection.id, userId, friendId, body);
+    }
   }
 
   // -- Admin: search, airport traffic inputs, duplicate detection -------------------------
@@ -431,4 +576,32 @@ function toFlightStatus(status: string) {
 
 function toDataSource(source: string) {
   return (FlightDataSource as Record<string, FlightDataSource>)[source] ?? FlightDataSource.MANUAL;
+}
+
+/** The chat message body for a detected overlap with an already-connected traveller. Needs an
+ * airport's timezone to say a sensible date (a flight landing just after local midnight
+ * shouldn't be described as departing "a day late") — for SAME_FLIGHT that's the shared flight's
+ * own departure airport (found by flight number among this journey's own segments, since `Match`
+ * doesn't carry it directly); for the airport-overlap categories it's just `match.airportIata`
+ * itself, both ends of the overlap being the same airport. */
+function describeTravelOverlap(
+  match: Match,
+  newSegments: PresenceSegmentInput[],
+  timezoneByIata: Map<string, string>,
+): string {
+  const formatLocalDate = (iso: string, iataCode: string | undefined): string => {
+    const timezone = (iataCode && timezoneByIata.get(iataCode)) || 'UTC';
+    return DateTime.fromISO(iso, { zone: 'utc' }).setZone(timezone).toFormat('ccc d LLL');
+  };
+
+  if (match.category === 'SAME_FLIGHT') {
+    const sharedSegment = newSegments.find((s) => s.flightNumber === match.flightNumber);
+    const when = formatLocalDate(match.overlapStartUtc, sharedSegment?.departureAirportIata);
+    return `You're both on ${match.flightNumber} again — ${when}.`;
+  }
+
+  const when = formatLocalDate(match.overlapStartUtc, match.airportIata);
+  return match.category === 'SAME_LAYOVER_AIRPORT'
+    ? `You've both got a layover at ${match.airportIata} together again — ${when}.`
+    : `You're both at ${match.airportIata} around the same time again — ${when}.`;
 }

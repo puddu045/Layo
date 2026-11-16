@@ -85,7 +85,10 @@ export type AssignReportRequest = z.infer<typeof assignReportRequestSchema>;
  * came from a 1:1 chat or an airport room. */
 export const reportConversationMessageSchema = z.object({
   id: z.string().uuid(),
-  senderId: z.string().uuid(),
+  /** Absent for a system message (see `messageSchema.senderId` in `@layo/contracts`'s message
+   * module) — `senderDisplayName` still reads "Layo" for one, so the admin viewing this
+   * conversation isn't left wondering who an unattributed line came from. */
+  senderId: z.string().uuid().optional(),
   senderDisplayName: z.string(),
   body: z.string(),
   createdAt: z.string().datetime(),

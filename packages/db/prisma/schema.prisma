@@ -266,9 +266,17 @@ model Message {
   id               String     @id @default(uuid())
   connectionId     String
   connection       Connection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
-  senderId         String
-  sender           User       @relation(fields: [senderId], references: [id])
+  // Null only for a system-generated message (see `isSystem`) — a message either user actually
+  // sent always has one.
+  senderId         String?
+  sender           User?      @relation(fields: [senderId], references: [id])
   body             String
+  // True for an automated message the app itself posts into the conversation (e.g. "you're both
+  // travelling together again") rather than something either participant typed — rendered
+  // without bubble styling or sender attribution, and ignored by `getTotalUnreadCount` the same
+  // way a message from yourself already is (nothing for either side to be notified "unread" by,
+  // since it isn't really from the other person).
+  isSystem         Boolean    @default(false)
   // The message this one is replying to, if any — nulled out (not cascaded) if that message is
   // ever removed, so a reply never becomes a dangling/invalid row, it just loses its quote.
   replyToMessageId String?

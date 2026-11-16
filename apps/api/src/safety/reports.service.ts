@@ -51,9 +51,13 @@ export class ReportsService {
       if (!isParticipant) {
         throw new ForbiddenException('You can only report messages in your own conversations');
       }
+      // A system message (no `senderId`) has no one to escalate against — nothing to report.
+      if (message.isSystem) {
+        throw new BadRequestException('This message cannot be reported');
+      }
       // A message report always implicates its sender, even if the client didn't also pass
       // reportedUserId — escalation should still count toward that person.
-      reportedUserId = reportedUserId ?? message.senderId;
+      reportedUserId = reportedUserId ?? message.senderId ?? undefined;
     }
 
     if (dto.reportedRoomMessageId) {
@@ -310,15 +314,15 @@ function toReportParty(user: { id: string; email: string; profile: { displayName
 
 function toConversationMessage(row: {
   id: string;
-  senderId: string;
+  senderId: string | null;
   body: string;
   createdAt: Date;
-  sender: { email: string; profile: { displayName: string } | null };
+  sender: { email: string; profile: { displayName: string } | null } | null;
 }): ReportConversationMessage {
   return {
     id: row.id,
-    senderId: row.senderId,
-    senderDisplayName: row.sender.profile?.displayName ?? row.sender.email,
+    senderId: row.senderId ?? undefined,
+    senderDisplayName: row.sender ? (row.sender.profile?.displayName ?? row.sender.email) : 'Layo',
     body: row.body,
     createdAt: row.createdAt.toISOString(),
   };

@@ -181,7 +181,29 @@ export class ConnectionsService {
       orderBy: { updatedAt: 'desc' },
     });
 
-    return this.toConnectionDtos(rows, userId);
+    const dtos = await this.toConnectionDtos(rows, userId);
+
+    // Sorted by the actual last message, not `updatedAt` — Prisma's `@updatedAt` bumps that
+    // column on ANY change to the row, not just a new message (accepting a request, for
+    // instance), so relying on it alone could float a chat with no new activity above one
+    // with an actual unread reply. Falls back to `updatedAt` for a connection with no
+    // messages yet (nothing to sort by otherwise), same as the Chats list's own empty-state
+    // "Say hello!" row still needs a sensible position.
+    return dtos.sort((a, b) => {
+      const aTime = new Date(a.lastMessage?.createdAt ?? a.updatedAt).getTime();
+      const bTime = new Date(b.lastMessage?.createdAt ?? b.updatedAt).getTime();
+      return bTime - aTime;
+    });
+  }
+
+  /** A message counts as unread by `viewerId` if it's not something they sent themselves — true
+   * for the other participant's messages, and also for a system message (`isSystem`, no
+   * `senderId` at all), which isn't "from" either side but should still show as unread for both,
+   * the same way a real message would. Not relying on `senderId: { not: viewerId }` alone for
+   * this, since a NULL `senderId` is never provably unequal to anything under plain SQL
+   * three-valued logic — spelled out explicitly here instead of assuming Prisma compensates. */
+  private unreadBySomeoneElse(viewerId: string) {
+    return { OR: [{ senderId: { not: viewerId } }, { isSystem: true }] };
   }
 
   /** Drives the Chats tab's badge — total unread messages across every accepted connection, in
@@ -190,7 +212,7 @@ export class ConnectionsService {
   async getTotalUnreadCount(userId: string): Promise<number> {
     return this.prisma.client.message.count({
       where: {
-        senderId: { not: userId },
+        ...this.unreadBySomeoneElse(userId),
         readAt: null,
         connection: {
           status: 'ACCEPTED',
@@ -250,7 +272,7 @@ export class ConnectionsService {
     const [otherProfile, unreadCount, lastMessage, blockedByMe] = await Promise.all([
       this.prisma.client.profile.findUnique({ where: { userId: otherUserId } }),
       this.prisma.client.message.count({
-        where: { connectionId: row.id, senderId: { not: viewerId }, readAt: null },
+        where: { connectionId: row.id, ...this.unreadBySomeoneElse(viewerId), readAt: null },
       }),
       this.prisma.client.message.findFirst({
         where: { connectionId: row.id },
@@ -287,7 +309,7 @@ export class ConnectionsService {
       this.prisma.client.profile.findMany({ where: { userId: { in: otherUserIds } } }),
       this.prisma.client.message.groupBy({
         by: ['connectionId'],
-        where: { connectionId: { in: connectionIds }, senderId: { not: viewerId }, readAt: null },
+        where: { connectionId: { in: connectionIds }, ...this.unreadBySomeoneElse(viewerId), readAt: null },
         _count: { _all: true },
       }),
       // One row per connection — the most recent message in it — via `distinct`, not N separate
@@ -329,7 +351,7 @@ export class ConnectionsService {
     otherUserId: string,
     otherProfile: Parameters<typeof toPublicProfile>[0],
     unreadCount: number,
-    lastMessage: { body: string; senderId: string; createdAt: Date } | null | undefined,
+    lastMessage: { body: string; senderId: string | null; createdAt: Date } | null | undefined,
     blockedByMe: boolean,
   ): Connection {
     return {
@@ -342,7 +364,11 @@ export class ConnectionsService {
       unreadCount,
       blockedByMe,
       lastMessage: lastMessage
-        ? { body: lastMessage.body, senderId: lastMessage.senderId, createdAt: lastMessage.createdAt.toISOString() }
+        ? {
+            body: lastMessage.body,
+            senderId: lastMessage.senderId ?? undefined,
+            createdAt: lastMessage.createdAt.toISOString(),
+          }
         : undefined,
       matchCategory: (row.matchCategory as Connection['matchCategory']) ?? undefined,
       matchAirportIata: row.matchAirportIata ?? undefined,

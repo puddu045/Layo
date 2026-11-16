@@ -55,10 +55,12 @@ export default function ChatScreen() {
   const [replyTo, setReplyTo] = useState<Message | undefined>(undefined);
 
   // The quoted preview (above the composer, and inside a reply bubble) only ever names "You" or
-  // the other participant — this is a 1:1 conversation, so a quoted message's sender is always
-  // one of exactly those two.
-  const replySenderLabel = (senderId: string) =>
-    senderId === session?.user.id ? 'You' : (connection?.otherProfile.displayName ?? 'them');
+  // the other participant in practice — this is a 1:1 conversation, and there's no UI path to
+  // reply to a system message (it has no long-press/swipe handler at all) — but `senderId` is
+  // optional on `Message` itself (a system message has none), so this still takes `undefined`
+  // defensively rather than assuming a case the type doesn't actually rule out.
+  const replySenderLabel = (senderId: string | undefined) =>
+    senderId === session?.user.id ? 'You' : senderId ? (connection?.otherProfile.displayName ?? 'them') : 'Layo';
 
   const onBlock = () => {
     if (!connection) return;
@@ -215,15 +217,19 @@ export default function ChatScreen() {
               data={messages.data?.items ?? []}
               keyExtractor={(item) => item.id}
               contentContainerStyle={styles.listContent}
-              renderItem={({ item }) => (
-                <MessageBubble
-                  message={item}
-                  isMine={item.senderId === session?.user.id}
-                  resolveSenderLabel={replySenderLabel}
-                  onLongPress={() => setActionsTarget(item)}
-                  onSwipeReply={() => setReplyTo(item)}
-                />
-              )}
+              renderItem={({ item }) =>
+                item.isSystem ? (
+                  <SystemMessageRow message={item} />
+                ) : (
+                  <MessageBubble
+                    message={item}
+                    isMine={item.senderId === session?.user.id}
+                    resolveSenderLabel={replySenderLabel}
+                    onLongPress={() => setActionsTarget(item)}
+                    onSwipeReply={() => setReplyTo(item)}
+                  />
+                )
+              }
             />
           )}
 
@@ -306,6 +312,17 @@ export default function ChatScreen() {
   );
 }
 
+/** An automated message the app itself posted ("you're both travelling together again" and the
+ * like) — centred, no bubble side, no sender attribution, and no long-press/swipe actions (reply
+ * and report both assume a message a person actually sent). */
+function SystemMessageRow({ message }: { message: Message }) {
+  return (
+    <View style={styles.systemRow}>
+      <Text style={styles.systemText}>{message.body}</Text>
+    </View>
+  );
+}
+
 // How far right a swipe has to travel before releasing it commits to a reply, and the cap on
 // how far the bubble is ever allowed to visually slide — small enough that even a "mine" bubble
 // (already docked against the row's right edge) has room to move without overshooting the screen.
@@ -321,7 +338,7 @@ function MessageBubble({
 }: {
   message: Message;
   isMine: boolean;
-  resolveSenderLabel: (senderId: string) => string;
+  resolveSenderLabel: (senderId: string | undefined) => string;
   onLongPress: () => void;
   onSwipeReply: () => void;
 }) {
@@ -396,6 +413,17 @@ const styles = StyleSheet.create({
   },
   swipeWrap: { position: 'relative' },
   swipeReplyIcon: { position: 'absolute', left: 8, top: '50%', marginTop: -9 },
+  systemRow: { alignItems: 'center', marginBottom: spacing.sm },
+  systemText: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    backgroundColor: colors.glassSurface,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    maxWidth: '85%',
+  },
   bubbleRow: { marginBottom: spacing.sm, maxWidth: '80%' },
   bubbleRowMine: { alignSelf: 'flex-end', alignItems: 'flex-end' },
   bubbleRowTheirs: { alignSelf: 'flex-start', alignItems: 'flex-start' },

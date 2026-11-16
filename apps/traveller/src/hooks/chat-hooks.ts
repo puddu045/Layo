@@ -123,6 +123,7 @@ export function useSendMessage(connectionId: string) {
         connectionId,
         senderId,
         body,
+        isSystem: false,
         replyTo: replyTo ? { id: replyTo.id, senderId: replyTo.senderId, body: replyTo.body } : undefined,
         createdAt: new Date().toISOString(),
       };

@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "Message" ALTER COLUMN "senderId" DROP NOT NULL,
+ADD COLUMN     "isSystem" BOOLEAN NOT NULL DEFAULT false;

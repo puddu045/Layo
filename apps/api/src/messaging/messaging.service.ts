@@ -119,8 +119,11 @@ export class MessagingService {
   async markRead(userId: string, connectionId: string): Promise<{ markedCount: number }> {
     const connection = await this.connectionsService.requireAcceptedParticipant(userId, connectionId);
 
+    // A system message (`isSystem`, no `senderId`) counts as unread for both participants, same
+    // as a real message from the other person — see `ConnectionsService.unreadBySomeoneElse`'s
+    // comment for why this isn't just `senderId: { not: userId }`.
     const result = await this.prisma.client.message.updateMany({
-      where: { connectionId, senderId: { not: userId }, readAt: null },
+      where: { connectionId, OR: [{ senderId: { not: userId } }, { isSystem: true }], readAt: null },
       data: { readAt: new Date() },
     });
 
@@ -137,23 +140,56 @@ export class MessagingService {
 
     return { markedCount: result.count };
   }
+
+  /** Posts an automated message into a connection's chat — "you're both travelling together
+   * again" and the like — rather than something either participant typed (see `Message.isSystem`
+   * and `JourneysService.notifyConnectedTravelOverlaps`, its one caller). Bumps `updatedAt` and
+   * emits `MESSAGE_NEW` the same way a real send does, so the conversation moves to the top of
+   * the Chats list for both of them, and raises a bell notification for both too — unlike a real
+   * message, which only pushes/bell-notifies the recipient, there's no single "sender" here for
+   * either side to already know about this from having typed it themselves. */
+  async createSystemMessage(connectionId: string, userAId: string, userBId: string, body: string): Promise<Message> {
+    const [row] = await this.prisma.client.$transaction([
+      this.prisma.client.message.create({
+        data: { connectionId, body, isSystem: true },
+        include: { replyTo: { select: { id: true, senderId: true, body: true } } },
+      }),
+      this.prisma.client.connection.update({
+        where: { id: connectionId },
+        data: { updatedAt: new Date() },
+      }),
+    ]);
+
+    const message = toMessageDto(row);
+    this.gateway.emitToUser(userAId, socketEvents.MESSAGE_NEW, { connectionId, message });
+    this.gateway.emitToUser(userBId, socketEvents.MESSAGE_NEW, { connectionId, message });
+
+    await Promise.all([
+      this.notificationsService.create(userAId, 'TRAVELLING_TOGETHER', { connectionId, body }),
+      this.notificationsService.create(userBId, 'TRAVELLING_TOGETHER', { connectionId, body }),
+    ]);
+
+    return message;
+  }
 }
 
 function toMessageDto(row: {
   id: string;
   connectionId: string;
-  senderId: string;
+  senderId: string | null;
   body: string;
-  replyTo: { id: string; senderId: string; body: string } | null;
+  isSystem: boolean;
+  replyTo: { id: string; senderId: string | null; body: string } | null;
   createdAt: Date;
   readAt: Date | null;
 }): Message {
   return {
     id: row.id,
     connectionId: row.connectionId,
-    senderId: row.senderId,
+    senderId: row.senderId ?? undefined,
     body: row.body,
-    replyTo: row.replyTo ?? undefined,
+    isSystem: row.isSystem,
+    replyTo: row.replyTo ? { ...row.replyTo, senderId: row.replyTo.senderId ?? undefined } : undefined,
     createdAt: row.createdAt.toISOString(),
     readAt: row.readAt?.toISOString(),
   };

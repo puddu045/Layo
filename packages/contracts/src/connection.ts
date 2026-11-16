@@ -36,7 +36,8 @@ export type RejectCandidateRequest = z.infer<typeof rejectCandidateRequestSchema
 
 export const connectionLastMessageSchema = z.object({
   body: z.string(),
-  senderId: z.string().uuid(),
+  /** Absent if the last message was a system one (see `messageSchema.senderId`). */
+  senderId: z.string().uuid().optional(),
   createdAt: z.string().datetime(),
 });
 export type ConnectionLastMessage = z.infer<typeof connectionLastMessageSchema>;

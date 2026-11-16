@@ -17,7 +17,8 @@ export type SendMessageRequest = z.infer<typeof sendMessageRequestSchema>;
  * out in that case — see the schema). */
 export const messageReplyPreviewSchema = z.object({
   id: z.string().uuid(),
-  senderId: z.string().uuid(),
+  /** Absent if the quoted message was itself a system message — see `messageSchema.senderId`. */
+  senderId: z.string().uuid().optional(),
   body: z.string(),
 });
 export type MessageReplyPreview = z.infer<typeof messageReplyPreviewSchema>;
@@ -25,8 +26,11 @@ export type MessageReplyPreview = z.infer<typeof messageReplyPreviewSchema>;
 export const messageSchema = z.object({
   id: z.string().uuid(),
   connectionId: z.string().uuid(),
-  senderId: z.string().uuid(),
+  /** Absent only for a system message (`isSystem: true`) — an automated message the app itself
+   * posts into the conversation, not something either participant typed. */
+  senderId: z.string().uuid().optional(),
   body: z.string(),
+  isSystem: z.boolean().default(false),
   replyTo: messageReplyPreviewSchema.optional(),
   createdAt: z.string().datetime(),
   readAt: z.string().datetime().optional(),

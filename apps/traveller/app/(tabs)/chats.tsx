@@ -61,9 +61,17 @@ export default function Chats() {
   const all = connections.data ?? [];
   const requests = all.filter((c) => c.status === 'PENDING' && c.direction === 'RECEIVED');
   const sent = all.filter((c) => c.status === 'PENDING' && c.direction === 'SENT');
+  // By the actual last message, not `updatedAt` (which the API already sorts by, the same way —
+  // see `ConnectionsService.list`) — `updatedAt` bumps on any change to the connection, not just
+  // a new message, so sorting by it alone could float a chat with no new activity above one with
+  // an actual unread reply.
   const accepted = all
     .filter((c) => c.status === 'ACCEPTED')
-    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+    .sort((a, b) => {
+      const aTime = new Date(a.lastMessage?.createdAt ?? a.updatedAt).getTime();
+      const bTime = new Date(b.lastMessage?.createdAt ?? b.updatedAt).getTime();
+      return bTime - aTime;
+    });
 
   if (all.length === 0) {
     return (

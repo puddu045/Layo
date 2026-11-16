@@ -59,6 +59,15 @@ function describe(n: Notification): { title: string; body: string; onPress?: () 
         body: status === 'APPROVED' ? 'Your deal is now live for travellers.' : `Your deal was rejected${reason}.`,
       };
     }
+    case 'TRAVELLING_TOGETHER': {
+      const connectionId = typeof n.payload.connectionId === 'string' ? n.payload.connectionId : undefined;
+      const body = typeof n.payload.body === 'string' ? n.payload.body : "You're travelling together again!";
+      return {
+        title: 'Travelling together again',
+        body,
+        onPress: () => router.push(connectionId ? `/chat/${connectionId}` : '/(tabs)/chats'),
+      };
+    }
     case 'REPORT_WARNING':
       return {
         title: 'Multiple people have reported you',
