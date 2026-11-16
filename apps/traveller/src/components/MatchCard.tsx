@@ -32,10 +32,15 @@ function formatWindow(startIso: string, endIso: string): string {
 export function MatchCard({
   match,
   onConnect,
+  onReject,
   onPressProfile,
 }: {
   match: Match;
   onConnect: () => void;
+  /** Discover's "not interested" action — only offered while there's actually a decision to
+   * make (`connectionStatus === 'NONE'`); once a request exists either way, declining it is
+   * the Chats tab's job, not Discover's. */
+  onReject?: () => void;
   /** Opens the profile preview popup (photo, name, a few details) for this traveller. */
   onPressProfile?: () => void;
 }) {
@@ -88,23 +93,32 @@ export function MatchCard({
         </Pressable>
       </View>
 
-      <Button
-        label={
-          match.connectionStatus === 'ACCEPTED'
-            ? 'Connected'
-            : match.connectionStatus === 'PENDING_SENT'
-              ? 'Request sent'
-              : match.connectionStatus === 'PENDING_RECEIVED'
-                ? 'Respond to request'
-                : 'Connect'
-        }
-        icon={connectIcon}
-        onPress={onConnect}
-        variant={match.connectionStatus === 'NONE' ? 'primary' : 'secondary'}
-        disabled={
-          match.connectionStatus === 'ACCEPTED' || match.connectionStatus === 'PENDING_SENT'
-        }
-      />
+      <View style={styles.actionRow}>
+        {onReject && match.connectionStatus === 'NONE' && (
+          <View style={styles.rejectButton}>
+            <Button label="Not now" variant="ghost" onPress={onReject} />
+          </View>
+        )}
+        <View style={styles.connectButton}>
+          <Button
+            label={
+              match.connectionStatus === 'ACCEPTED'
+                ? 'Connected'
+                : match.connectionStatus === 'PENDING_SENT'
+                  ? 'Request sent'
+                  : match.connectionStatus === 'PENDING_RECEIVED'
+                    ? 'Respond to request'
+                    : 'Connect'
+            }
+            icon={connectIcon}
+            onPress={onConnect}
+            variant={match.connectionStatus === 'NONE' ? 'primary' : 'secondary'}
+            disabled={
+              match.connectionStatus === 'ACCEPTED' || match.connectionStatus === 'PENDING_SENT'
+            }
+          />
+        </View>
+      </View>
     </Card>
   );
 }
@@ -125,4 +139,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   windowLabel: { ...typography.label, color: colors.navy700 },
+  actionRow: { flexDirection: 'row', gap: spacing.sm },
+  rejectButton: { flex: 1 },
+  connectButton: { flex: 2 },
 });

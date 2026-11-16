@@ -4,7 +4,9 @@ import type { Journey } from '@layo/contracts';
 import { colors, radius, spacing, typography } from '../theme/tokens';
 import { Card } from './Card';
 
-function formatDateTime(iso: string): string {
+// `timeZone` is the departure airport's own IANA zone, not the device's — without it this would
+// show whatever day/time the flight departs AT THE VIEWER'S location, not at the airport.
+function formatDateTime(iso: string, timeZone: string): string {
   const d = new Date(iso);
   return d.toLocaleString(undefined, {
     weekday: 'short',
@@ -12,6 +14,7 @@ function formatDateTime(iso: string): string {
     month: 'short',
     hour: '2-digit',
     minute: '2-digit',
+    timeZone,
   });
 }
 
@@ -58,7 +61,7 @@ export function JourneyCard({ journey, onPress }: { journey: Journey; onPress: (
               />
             </View>
             <Text style={styles.segmentTime}>
-              {formatDateTime(segment.flight.scheduledDepartureUtc)}
+              {formatDateTime(segment.flight.scheduledDepartureUtc, segment.flight.departureAirport.timezone)}
             </Text>
             {!segment.flight.verified && <Text style={styles.unverified}>Unverified schedule</Text>}
           </View>

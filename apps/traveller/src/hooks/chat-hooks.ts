@@ -31,6 +31,18 @@ export function useCreateConnection() {
   });
 }
 
+/** Discover's "not interested" action — records the same DECLINED outcome a real decline would,
+ * so this pair stops matching for both of them (see `ConnectionsService.rejectCandidate`). */
+export function useRejectCandidate() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (rejectedUserId: string) => api.post<void>('/connections/reject', { rejectedUserId }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['discover'] });
+    },
+  });
+}
+
 export function useAcceptConnection() {
   const queryClient = useQueryClient();
   return useMutation({

@@ -125,6 +125,20 @@ function normalizeUtc(utc: string): string {
   return utc.includes('T') ? utc : utc.replace(' ', 'T');
 }
 
+/** The calendar date `scheduledUtc` falls on AT the airport itself (`timezone`, its own IANA
+ * zone) — e.g. a 20:25 UTC departure from Dubai (UTC+4) is "the next day" there, not whatever
+ * date it happens to be in UTC or at the viewer's own location. `'en-CA'` is just a convenient
+ * way to get `Intl.DateTimeFormat` to hand back `YYYY-MM-DD` directly, not a locale choice that
+ * matters otherwise. */
+export function localDateOf(scheduledUtc: string, timezone: string): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date(scheduledUtc));
+}
+
 /** `fallbackIataCode` covers the one real gap in AeroDataBox's airport-schedule endpoint: for a
  * `direction=Departure` query, each result's own `departure.airport` is omitted entirely (it's
  * redundant with the airport you already queried by code), so without this every departure would

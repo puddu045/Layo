@@ -13,7 +13,7 @@ export type ConnectRequestAction =
   | { type: 'CREATE' }
   | { type: 'AUTO_ACCEPT'; existingId: string }
   | { type: 'REOPEN'; existingId: string }
-  | { type: 'REJECT'; reason: 'ALREADY_PENDING' | 'ALREADY_CONNECTED' };
+  | { type: 'REJECT'; reason: 'ALREADY_PENDING' | 'ALREADY_CONNECTED' | 'PREVIOUSLY_DECLINED' };
 
 /**
  * Decides what sending a connection request should actually do, given whatever
@@ -26,9 +26,14 @@ export type ConnectRequestAction =
  *   accepting theirs, rather than creating a second, reversed row.
  * - A row already exists PENDING from me, or ACCEPTED (either direction) →
  *   reject; nothing to do.
- * - The only existing row was DECLINED or CANCELLED → reopen it as a fresh
- *   PENDING request from me, rather than accumulating duplicate rows for the
- *   same pair of users over time.
+ * - The only existing row was CANCELLED (the requester changed their mind) →
+ *   reopen it as a fresh PENDING request from me, rather than accumulating
+ *   duplicate rows for the same pair of users over time.
+ * - The only existing row was DECLINED → reject. Unlike a cancelled request,
+ *   a decline is a deliberate "no" from the other person (or this one, if
+ *   it was a Discover reject) — it must not be re-openable, or hiding
+ *   declined profiles from Discover (see `MatchingService`) would just be
+ *   undone the next time either side hits "connect" again.
  */
 export function decideConnectRequestAction(existing: ExistingConnectionInfo | null): ConnectRequestAction {
   if (!existing) return { type: 'CREATE' };
@@ -44,6 +49,10 @@ export function decideConnectRequestAction(existing: ExistingConnectionInfo | nu
     return { type: 'REJECT', reason: 'ALREADY_PENDING' };
   }
 
-  // DECLINED or CANCELLED — reopen rather than create a second row for this pair.
+  if (existing.status === 'DECLINED') {
+    return { type: 'REJECT', reason: 'PREVIOUSLY_DECLINED' };
+  }
+
+  // CANCELLED — reopen rather than create a second row for this pair.
   return { type: 'REOPEN', existingId: existing.id };
 }

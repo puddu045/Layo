@@ -27,6 +27,13 @@ export const createConnectionRequestSchema = z.object({
 }).merge(connectionMatchContextSchema);
 export type CreateConnectionRequest = z.infer<typeof createConnectionRequestSchema>;
 
+/** Discover's "not interested" action — no existing connection row is required (or expected)
+ * for this one, unlike accept/decline/cancel, which all act on a connectionId. */
+export const rejectCandidateRequestSchema = z.object({
+  rejectedUserId: z.string().uuid(),
+});
+export type RejectCandidateRequest = z.infer<typeof rejectCandidateRequestSchema>;
+
 export const connectionLastMessageSchema = z.object({
   body: z.string(),
   senderId: z.string().uuid(),

@@ -8,6 +8,7 @@ import type { IFlightProvider } from './flight-provider.interface';
 import {
   buildDailyWindows,
   isParsedCandidate,
+  localDateOf,
   parseAeroDataBoxFlight,
   type AeroDataBoxAirportFidsResponse,
   type AeroDataBoxAirportFlight,
@@ -41,9 +42,16 @@ export class AeroDataBoxFlightProvider implements IFlightProvider {
     const url = `${env.AERODATABOX_BASE_URL}/flights/Number/${encodeURIComponent(flightNumber)}/${departureDate}`;
     const raw = await this.request<AeroDataBoxAirportFlight[]>(url, env);
 
+    // AeroDataBox's by-number endpoint doesn't strictly limit itself to the queried date — for a
+    // flight that departs late enough to cross a UTC date boundary, it can return the adjacent
+    // day's instance alongside (or instead of) the one actually requested. Confirmed in
+    // production: searching "EK36" for 15 Dec returned both the 14 Dec AND 15 Dec instances of
+    // this daily flight. Filtering to the departure's own LOCAL calendar date — at the departure
+    // airport, not UTC or the viewer's — is what actually answers "what departs on this date".
     const parsed = (raw ?? [])
       .map((record) => parseAeroDataBoxFlight(record, departureDate))
-      .filter((c): c is ParsedCandidate => c !== undefined);
+      .filter((c): c is ParsedCandidate => c !== undefined)
+      .filter((c) => localDateOf(c.departure.scheduledUtc, c.departure.timezone ?? 'UTC') === departureDate);
     return this.toCandidates(parsed);
   }
 

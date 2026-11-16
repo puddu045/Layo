@@ -80,9 +80,49 @@ export class ConnectionsService {
         throw new ConflictException(
           action.reason === 'ALREADY_CONNECTED'
             ? 'You are already connected with this traveller'
-            : 'A connection request is already pending',
+            : action.reason === 'PREVIOUSLY_DECLINED'
+              ? 'This connection was declined and cannot be reopened'
+              : 'A connection request is already pending',
         );
       }
+    }
+  }
+
+  /** Discover's "not interested" action — the candidate has no pending request either way (if
+   * they did, Discover wouldn't be showing them at all, since both PENDING directions are
+   * excluded there), so this isn't "decline an existing request", it's pre-emptively recording
+   * the same DECLINED outcome so the pair stops matching in Discover for both of them, exactly
+   * like an actual decline does. Reuses `DECLINED` rather than a separate status so the one
+   * exclusion rule in `MatchingService` covers both cases. */
+  async rejectCandidate(userId: string, rejectedUserId: string): Promise<void> {
+    if (userId === rejectedUserId) {
+      throw new BadRequestException('You cannot reject yourself');
+    }
+
+    const existingRow = await this.prisma.client.connection.findFirst({
+      where: {
+        OR: [
+          { requesterId: userId, addresseeId: rejectedUserId },
+          { requesterId: rejectedUserId, addresseeId: userId },
+        ],
+      },
+    });
+
+    if (!existingRow) {
+      await this.prisma.client.connection.create({
+        data: { requesterId: userId, addresseeId: rejectedUserId, status: 'DECLINED' },
+      });
+      return;
+    }
+
+    // Only a still-pending request *they* sent *me* is actually theirs to decline here — any
+    // other existing status (already accepted, already declined, or a request I sent myself)
+    // is already resolved, so there's nothing for "reject" to do.
+    if (existingRow.status === 'PENDING' && existingRow.addresseeId === userId) {
+      await this.prisma.client.connection.update({
+        where: { id: existingRow.id },
+        data: { status: 'DECLINED' },
+      });
     }
   }
 

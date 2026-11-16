@@ -273,8 +273,13 @@ export default function NewJourney() {
                     {candidate.departureAirport.iataCode} → {candidate.arrivalAirport.iataCode}
                   </Text>
                   <Text style={styles.candidateTime}>
-                    {new Date(candidate.scheduledDepartureUtc).toLocaleString()} →{' '}
-                    {new Date(candidate.scheduledArrivalUtc).toLocaleString()}
+                    {new Date(candidate.scheduledDepartureUtc).toLocaleString(undefined, {
+                      timeZone: candidate.departureAirport.timezone,
+                    })}{' '}
+                    →{' '}
+                    {new Date(candidate.scheduledArrivalUtc).toLocaleString(undefined, {
+                      timeZone: candidate.arrivalAirport.timezone,
+                    })}
                   </Text>
                   {candidate.status !== 'SCHEDULED' && (
                     <Text style={styles.candidateStatus}>Status: {candidate.status}</Text>

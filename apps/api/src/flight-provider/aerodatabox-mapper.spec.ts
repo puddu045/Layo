@@ -3,6 +3,7 @@ import {
   addDaysToIsoDate,
   buildDailyWindows,
   isParsedCandidate,
+  localDateOf,
   mapAeroDataBoxStatus,
   parseAeroDataBoxFlight,
   type AeroDataBoxAirportFlight,
@@ -171,5 +172,22 @@ describe('addDaysToIsoDate', () => {
 
   it('rolls over to the next year', () => {
     expect(addDaysToIsoDate('2026-12-31', 1)).toBe('2027-01-01');
+  });
+});
+
+describe('localDateOf', () => {
+  // The exact case behind the "EK36 shows twice" bug report: a flight departing Newcastle at
+  // 13:15 UTC lands in Dubai (UTC+4) at 00:25 — the next calendar day there, even though it's
+  // still the same UTC day the whole time.
+  it('rolls over to the next day in a timezone ahead of UTC', () => {
+    expect(localDateOf('2026-12-14T20:25:00Z', 'Asia/Dubai')).toBe('2026-12-15');
+  });
+
+  it('matches the UTC date in a zone with no offset', () => {
+    expect(localDateOf('2026-12-14T13:15:00Z', 'Europe/London')).toBe('2026-12-14');
+  });
+
+  it('rolls back to the previous day in a timezone behind UTC', () => {
+    expect(localDateOf('2026-12-15T02:00:00Z', 'America/New_York')).toBe('2026-12-14');
   });
 });

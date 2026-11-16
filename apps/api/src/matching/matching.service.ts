@@ -80,21 +80,29 @@ export class MatchingService {
     });
 
     const blockedUserIds = await this.blocksService.getBlockedUserIdSet(requesterId);
-    const candidateUserIds = [...new Set(candidateJourneys.map((j) => j.userId))].filter(
+    const candidateUserIdsRaw = [...new Set(candidateJourneys.map((j) => j.userId))].filter(
       (id) => !blockedUserIds.has(id),
     );
-    const connectionStatusByUser = await this.getConnectionStatuses(requesterId, candidateUserIds);
+    // Discover only ever shows someone with nothing going on yet — already connected, a pending
+    // request either way, and a previously declined pair are all excluded, not just annotated,
+    // so none of them can resurface here. A CANCELLED request is the one exception: that's the
+    // requester changing their mind, not a rejection, so it's left out of this set and that pair
+    // stays re-discoverable (matches `decideConnectRequestAction`'s REOPEN case).
+    const resolvedUserIds = await this.getResolvedConnectionUserIds(requesterId, candidateUserIdsRaw);
+    const candidateUserIds = new Set(candidateUserIdsRaw.filter((id) => !resolvedUserIds.has(id)));
 
     const candidates: CandidateTraveller[] = [];
     for (const journey of candidateJourneys) {
-      if (blockedUserIds.has(journey.userId)) continue;
+      if (!candidateUserIds.has(journey.userId)) continue;
       if (!journey.user.profile || !journey.user.profile.discoverable) continue;
 
       candidates.push({
         userId: journey.userId,
         profile: toPublicProfile(journey.user.profile),
         segments: toPresenceSegments(journey.segments),
-        connectionStatus: connectionStatusByUser.get(journey.userId) ?? 'NONE',
+        // Always 'NONE' — anyone with an ACCEPTED, PENDING, or DECLINED connection to the
+        // requester was already filtered out above, before `candidates` was ever built.
+        connectionStatus: 'NONE',
       });
     }
 
@@ -161,11 +169,11 @@ export class MatchingService {
   }
 
 
-  private async getConnectionStatuses(
-    requesterId: string,
-    otherUserIds: string[],
-  ): Promise<Map<string, Match['connectionStatus']>> {
-    if (otherUserIds.length === 0) return new Map();
+  /** Every candidate who should be excluded from Discover because something's already happened
+   * between them and the requester — connected, a pending request in either direction, or a
+   * declined one. Deliberately excludes CANCELLED: see this method's call site. */
+  private async getResolvedConnectionUserIds(requesterId: string, otherUserIds: string[]): Promise<Set<string>> {
+    if (otherUserIds.length === 0) return new Set();
 
     const connections = await this.prisma.client.connection.findMany({
       where: {
@@ -173,19 +181,12 @@ export class MatchingService {
           { requesterId, addresseeId: { in: otherUserIds } },
           { addresseeId: requesterId, requesterId: { in: otherUserIds } },
         ],
+        status: { in: ['ACCEPTED', 'PENDING', 'DECLINED'] },
       },
+      select: { requesterId: true, addresseeId: true },
     });
 
-    const result = new Map<string, Match['connectionStatus']>();
-    for (const c of connections) {
-      const otherUserId = c.requesterId === requesterId ? c.addresseeId : c.requesterId;
-      if (c.status === 'ACCEPTED') {
-        result.set(otherUserId, 'ACCEPTED');
-      } else if (c.status === 'PENDING') {
-        result.set(otherUserId, c.requesterId === requesterId ? 'PENDING_SENT' : 'PENDING_RECEIVED');
-      }
-    }
-    return result;
+    return new Set(connections.map((c) => (c.requesterId === requesterId ? c.addresseeId : c.requesterId)));
   }
 }
 

@@ -3,8 +3,10 @@ import { Throttle } from '@nestjs/throttler';
 import {
   createConnectionRequestSchema,
   listConnectionsQuerySchema,
+  rejectCandidateRequestSchema,
   type CreateConnectionRequest,
   type ListConnectionsQuery,
+  type RejectCandidateRequest,
 } from '@layo/contracts';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -35,6 +37,15 @@ export class ConnectionsController {
     @Body(new ZodValidationPipe(createConnectionRequestSchema)) dto: CreateConnectionRequest,
   ) {
     return this.connectionsService.sendRequest(user.id, dto.addresseeUserId, dto);
+  }
+
+  @Post('reject')
+  @Throttle({ default: { limit: 60, ttl: 60_000 } })
+  reject(
+    @CurrentUser() user: RequestUser,
+    @Body(new ZodValidationPipe(rejectCandidateRequestSchema)) dto: RejectCandidateRequest,
+  ) {
+    return this.connectionsService.rejectCandidate(user.id, dto.rejectedUserId);
   }
 
   @Post(':connectionId/accept')

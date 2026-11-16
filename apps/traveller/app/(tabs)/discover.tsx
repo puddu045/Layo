@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { FlatList, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
+import { useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
-import type { Match, MatchCategory } from '@layo/contracts';
+import type { Match, MatchCategory, PaginatedResponse } from '@layo/contracts';
 import { ScreenContainer } from '../../src/components/ScreenContainer';
 import { MatchCard } from '../../src/components/MatchCard';
 import { Chip } from '../../src/components/Chip';
@@ -10,7 +11,7 @@ import { TopBarIcons } from '../../src/components/TopBarIcons';
 import { ProfilePreviewModal, type ProfilePreviewMatchInfo } from '../../src/components/ProfilePreviewModal';
 import { EmptyState, ErrorState, LoadingState } from '../../src/components/StateViews';
 import { useDiscover, useJourneys } from '../../src/hooks/api-hooks';
-import { useCreateConnection } from '../../src/hooks/chat-hooks';
+import { useCreateConnection, useRejectCandidate } from '../../src/hooks/chat-hooks';
 import { notifyInfo } from '../../src/lib/notify';
 import { colors, spacing, typography } from '../../src/theme/tokens';
 
@@ -24,9 +25,12 @@ const FILTERS: Array<{ label: string; value: MatchCategory | undefined; icon: ke
 export default function Discover() {
   const [category, setCategory] = useState<MatchCategory | undefined>(undefined);
   const [preview, setPreview] = useState<{ userId: string; matchInfo: ProfilePreviewMatchInfo } | undefined>();
+  const queryClient = useQueryClient();
+  const discoverQuery = { category, page: 1, pageSize: 20 };
   const journeys = useJourneys();
-  const discover = useDiscover({ category, page: 1, pageSize: 20 });
+  const discover = useDiscover(discoverQuery);
   const createConnection = useCreateConnection();
+  const rejectCandidate = useRejectCandidate();
 
   const onConnect = (match: Match) => {
     createConnection.mutate(
@@ -55,6 +59,30 @@ export default function Discover() {
         },
       },
     );
+  };
+
+  // Removes the card the instant it's rejected rather than waiting on a round trip — the
+  // invalidation in `useRejectCandidate` would eventually do the same, but only after a refetch,
+  // which reads as the card briefly staying put. Rolled back on failure since the server is the
+  // actual source of truth for who's still a candidate.
+  const onReject = (match: Match) => {
+    const queryKey = ['discover', discoverQuery];
+    const previous = queryClient.getQueryData<PaginatedResponse<Match>>(queryKey);
+    queryClient.setQueryData<PaginatedResponse<Match>>(queryKey, (old) =>
+      old
+        ? {
+            ...old,
+            items: old.items.filter((m) => m.profile.userId !== match.profile.userId),
+            total: Math.max(0, old.total - 1),
+          }
+        : old,
+    );
+    rejectCandidate.mutate(match.profile.userId, {
+      onError: () => {
+        queryClient.setQueryData(queryKey, previous);
+        notifyInfo('Could not do that', 'Please try again.');
+      },
+    });
   };
 
   return (
@@ -106,6 +134,7 @@ export default function Discover() {
             <MatchCard
               match={item}
               onConnect={() => onConnect(item)}
+              onReject={() => onReject(item)}
               onPressProfile={() =>
                 setPreview({
                   userId: item.profile.userId,

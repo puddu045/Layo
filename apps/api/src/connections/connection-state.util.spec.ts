@@ -27,9 +27,9 @@ describe('decideConnectRequestAction', () => {
     });
   });
 
-  it('reopens a previously declined request instead of creating a duplicate row', () => {
+  it('rejects a previously declined request rather than letting it be reopened', () => {
     const result = decideConnectRequestAction({ id: 'c1', status: 'DECLINED', direction: 'OTHER_TO_ME' });
-    expect(result).toEqual({ type: 'REOPEN', existingId: 'c1' });
+    expect(result).toEqual({ type: 'REJECT', reason: 'PREVIOUSLY_DECLINED' });
   });
 
   it('reopens a previously cancelled request instead of creating a duplicate row', () => {
