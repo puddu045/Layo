@@ -208,7 +208,7 @@ export default function Settings() {
   };
 
   return (
-    <ScreenContainer>
+    <ScreenContainer hasNativeHeader>
       {/* 'height' on Android, not undefined: see journeys/new.tsx for why. */}
       <KeyboardAvoidingView style={styles.keyboardAvoider} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <ScrollView contentContainerStyle={styles.scroll}>

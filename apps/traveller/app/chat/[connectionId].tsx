@@ -143,7 +143,7 @@ export default function ChatScreen() {
   const blockedByMe = connection?.blockedByMe ?? false;
 
   return (
-    <ScreenContainer style={{ paddingHorizontal: 0 }}>
+    <ScreenContainer style={{ paddingHorizontal: 0 }} hasNativeHeader>
       <Stack.Screen
         options={{
           title: connection?.otherProfile.displayName ?? 'Chat',
@@ -194,14 +194,15 @@ export default function ChatScreen() {
           onRetry={blockedByOther ? undefined : () => messages.refetch()}
         />
       ) : (
-        /* 'height' on Android, not undefined: this relied on windowSoftInputMode=adjustResize,
-           which the project never actually configures in app.json (and which Expo Go's prebuilt
-           manifest wouldn't pick up from app.json anyway) — 'height' handles it entirely in JS
-           via the Keyboard module instead, so it doesn't depend on any native manifest setting. */
+        /* 'height' on Android, not undefined: app.json sets softwareKeyboardLayoutMode to "pan"
+           so Android never resizes the window itself; this handles it entirely in JS instead,
+           matching every other keyboard-avoiding screen in the app. No keyboardVerticalOffset
+           here either, for the same reason — the stray 90px offset this screen used to carry
+           over-shrank the view by 90px more than the keyboard actually needs, which is what was
+           collapsing the message list and input bar to nothing while the keyboard was up. */
         <KeyboardAvoidingView
           style={{ flex: 1 }}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={90}
         >
           {(messages.data?.items.length ?? 0) === 0 ? (
             // Rendered outside the inverted FlatList on purpose: a `ListEmptyComponent` sits

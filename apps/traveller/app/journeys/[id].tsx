@@ -32,7 +32,7 @@ export default function JourneyDetail() {
 
   if (journey.isLoading) {
     return (
-      <ScreenContainer>
+      <ScreenContainer hasNativeHeader>
         <LoadingState label="Loading journey…" />
       </ScreenContainer>
     );
@@ -40,7 +40,7 @@ export default function JourneyDetail() {
 
   if (journey.isError || !journey.data) {
     return (
-      <ScreenContainer>
+      <ScreenContainer hasNativeHeader>
         <ErrorState
           message={journey.error instanceof Error ? journey.error.message : 'Could not load this journey'}
           onRetry={() => journey.refetch()}
@@ -80,7 +80,7 @@ export default function JourneyDetail() {
   }
 
   return (
-    <ScreenContainer>
+    <ScreenContainer hasNativeHeader>
       <ScrollView contentContainerStyle={styles.scroll}>
         <Text style={styles.title}>
           {data.segments[0]?.flight.departureAirport.iataCode} →{' '}

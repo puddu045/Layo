@@ -166,7 +166,7 @@ export default function NewJourney() {
   };
 
   return (
-    <ScreenContainer>
+    <ScreenContainer hasNativeHeader>
       {/* 'height' on Android, not undefined: app.json sets softwareKeyboardLayoutMode to "pan"
           (not the more common "resize") specifically so Android never tries to shrink the window
           itself — that was the original plan here, but Expo Go's own prebuilt manifest can't pick

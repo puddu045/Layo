@@ -65,7 +65,7 @@ export default function AirportRoomScreen() {
   };
 
   return (
-    <ScreenContainer style={{ paddingHorizontal: 0 }}>
+    <ScreenContainer style={{ paddingHorizontal: 0 }} hasNativeHeader>
       <Stack.Screen options={{ title: airportIata ? `${airportIata} Airport Chat` : 'Airport Chat' }} />
 
       {messages.isLoading ? (
@@ -76,11 +76,11 @@ export default function AirportRoomScreen() {
           onRetry={() => messages.refetch()}
         />
       ) : (
-        /* 'height' on Android, not undefined: see chat/[connectionId].tsx for why. */
+        /* 'height' on Android, not undefined: see chat/[connectionId].tsx for why (and for why
+           there's no keyboardVerticalOffset here either). */
         <KeyboardAvoidingView
           style={{ flex: 1 }}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={90}
         >
           <FlatList
             inverted
