@@ -15,6 +15,13 @@ import { PrismaService } from '../common/prisma/prisma.service';
 import { FlightsService } from '../flights/flights.service';
 import { computeLayovers } from './layover.util';
 
+/** A persisted `Flight` row's id plus just enough to sort segments chronologically — see
+ * `createJourney`'s sort, the reason this is returned instead of a bare id. */
+interface ResolvedFlight {
+  id: string;
+  scheduledDepartureUtc: Date;
+}
+
 @Injectable()
 export class JourneysService {
   constructor(
@@ -28,18 +35,27 @@ export class JourneysService {
       resolvedFlights.push(await this.resolveFlightForSegment(segment));
     }
 
+    // `sequence` reflects when each flight actually departs, not the order the segments arrived
+    // in on the request — a journey built by adding its later leg first (confirmed in production:
+    // a connecting flight added before its own first leg) would otherwise keep that mistake
+    // permanently, breaking the journey's title (first departure → last arrival) and layover
+    // detection, both of which assume `sequence` order is chronological order.
+    const sorted = [...resolvedFlights].sort(
+      (a, b) => a.scheduledDepartureUtc.getTime() - b.scheduledDepartureUtc.getTime(),
+    );
+
     const journey = await this.prisma.client.journey.create({
       data: {
         userId,
         title: dto.title,
         isDiscoverable: dto.isDiscoverable,
         segments: {
-          create: resolvedFlights.map((flightId, index) => ({ flightId, sequence: index + 1 })),
+          create: sorted.map((flight, index) => ({ flightId: flight.id, sequence: index + 1 })),
         },
       },
     });
 
-    await this.ensureAirportRooms(resolvedFlights);
+    await this.ensureAirportRooms(resolvedFlights.map((f) => f.id));
 
     return this.getJourney(userId, journey.id);
   }
@@ -86,8 +102,10 @@ export class JourneysService {
     if (journey.userId !== userId) throw new ForbiddenException('This journey belongs to another traveller');
   }
 
-  /** Resolves one journey segment to a persisted Flight row's id, creating it if needed. */
-  private async resolveFlightForSegment(segment: AddJourneySegmentRequest): Promise<string> {
+  /** Resolves one journey segment to a persisted Flight row, creating it if needed. Returns
+   * `scheduledDepartureUtc` alongside the id so `createJourney` can sort every segment into
+   * chronological order regardless of what order they were submitted in. */
+  private async resolveFlightForSegment(segment: AddJourneySegmentRequest): Promise<ResolvedFlight> {
     if (segment.confirmedFlight) {
       const candidate = await this.flightsService.resolveConfirmedCandidate(
         segment.confirmedFlight.flightNumber,
@@ -104,7 +122,7 @@ export class JourneysService {
     throw new BadRequestException('Either confirmedFlight or manualEntry must be provided');
   }
 
-  private async upsertFlightFromCandidate(candidate: FlightCandidate): Promise<string> {
+  private async upsertFlightFromCandidate(candidate: FlightCandidate): Promise<ResolvedFlight> {
     const scheduledDepartureUtc = new Date(candidate.scheduledDepartureUtc);
     const canonicalKey = computeCanonicalFlightKey({
       airlineIataCode: candidate.airline.iataCode,
@@ -137,10 +155,10 @@ export class JourneysService {
         status: toFlightStatus(candidate.status),
       },
     });
-    return flight.id;
+    return { id: flight.id, scheduledDepartureUtc: flight.scheduledDepartureUtc };
   }
 
-  private async upsertManualFlight(entry: AddJourneySegmentRequest['manualEntry']): Promise<string> {
+  private async upsertManualFlight(entry: AddJourneySegmentRequest['manualEntry']): Promise<ResolvedFlight> {
     if (!entry) throw new BadRequestException('manualEntry is required');
 
     const [departureAirport, arrivalAirport, airline] = await Promise.all([
@@ -178,7 +196,7 @@ export class JourneysService {
       },
       update: {},
     });
-    return flight.id;
+    return { id: flight.id, scheduledDepartureUtc: flight.scheduledDepartureUtc };
   }
 
   // -- Admin: search, airport traffic inputs, duplicate detection -------------------------
