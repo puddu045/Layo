@@ -10,7 +10,6 @@ import { AvatarCropModal } from '../src/components/AvatarCropModal';
 import { ImageViewerModal } from '../src/components/ImageViewerModal';
 import { ChangePasswordModal } from '../src/components/ChangePasswordModal';
 import { EditProfileFieldModal } from '../src/components/EditProfileFieldModal';
-import { TextField } from '../src/components/TextField';
 import { Button } from '../src/components/Button';
 import { ErrorState, LoadingState } from '../src/components/StateViews';
 import { useAuth } from '../src/lib/auth-context';
@@ -20,9 +19,12 @@ import { notifyConfirm, notifyInfo } from '../src/lib/notify';
 import { ApiError } from '../src/lib/api-client';
 import { colors, radius, spacing, typography } from '../src/theme/tokens';
 
-type ProfileField = 'displayName' | 'bio' | 'interests' | 'languages';
+type ProfileField = 'displayName' | 'bio' | 'interests' | 'languages' | 'phone';
 
-const FIELD_META: Record<ProfileField, { title: string; label: string; multiline?: boolean; placeholder: string }> = {
+const FIELD_META: Record<
+  ProfileField,
+  { title: string; label: string; multiline?: boolean; placeholder: string; keyboardType?: 'phone-pad' }
+> = {
   displayName: { title: 'Display name', label: 'Display name', placeholder: 'Your name' },
   bio: {
     title: 'Bio',
@@ -40,6 +42,12 @@ const FIELD_META: Record<ProfileField, { title: string; label: string; multiline
     label: 'Languages (comma separated)',
     placeholder: 'English, Spanish',
   },
+  phone: {
+    title: 'Phone number',
+    label: 'Phone number (optional)',
+    placeholder: '+14155552671',
+    keyboardType: 'phone-pad',
+  },
 };
 
 export default function Settings() {
@@ -55,10 +63,6 @@ export default function Settings() {
 
   const [discoverable, setDiscoverable] = useState(true);
 
-  const [phone, setPhone] = useState('');
-  const [phoneError, setPhoneError] = useState<string | undefined>();
-  const [phoneSaved, setPhoneSaved] = useState(false);
-
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
 
   const [editingField, setEditingField] = useState<ProfileField | null>(null);
@@ -68,7 +72,6 @@ export default function Settings() {
   useEffect(() => {
     if (profile.data) {
       setDiscoverable(profile.data.discoverable);
-      setPhone(profile.data.phone ?? '');
     }
   }, [profile.data]);
 
@@ -99,6 +102,8 @@ export default function Settings() {
         return profile.data.interests.join(', ');
       case 'languages':
         return profile.data.languages.join(', ');
+      case 'phone':
+        return profile.data.phone ?? '';
     }
   };
 
@@ -113,9 +118,28 @@ export default function Settings() {
     setFieldError(undefined);
   };
 
+  // Phone has its own endpoint/schema (it's verification-gated, unlike the rest of the profile),
+  // so this branches to `useUpdatePhone` for that one field but otherwise shares the same
+  // open-a-modal-per-field flow as the plain profile fields.
   const onSaveField = async () => {
     if (!editingField) return;
     setFieldError(undefined);
+
+    if (editingField === 'phone') {
+      const parsed = updatePhoneRequestSchema.safeParse({ phone: draftValue.trim() || null });
+      if (!parsed.success) {
+        setFieldError(parsed.error.issues[0]?.message ?? 'Enter a valid phone number');
+        return;
+      }
+      try {
+        await updatePhone.mutateAsync(parsed.data);
+        closeEditor();
+      } catch (err) {
+        setFieldError(err instanceof ApiError ? err.message : 'Could not save your phone number');
+      }
+      return;
+    }
+
     const payload =
       editingField === 'interests' || editingField === 'languages'
         ? { [editingField]: draftValue.split(',').map((s) => s.trim()).filter(Boolean) }
@@ -140,22 +164,6 @@ export default function Settings() {
       { discoverable: value },
       { onError: () => setDiscoverable(!value) },
     );
-  };
-
-  const onSavePhone = async () => {
-    setPhoneError(undefined);
-    setPhoneSaved(false);
-    const parsed = updatePhoneRequestSchema.safeParse({ phone: phone.trim() || null });
-    if (!parsed.success) {
-      setPhoneError(parsed.error.issues[0]?.message ?? 'Enter a valid phone number');
-      return;
-    }
-    try {
-      await updatePhone.mutateAsync(parsed.data);
-      setPhoneSaved(true);
-    } catch (err) {
-      setPhoneError(err instanceof ApiError ? err.message : 'Could not save your phone number');
-    }
   };
 
   const onPickPhoto = async () => {
@@ -239,17 +247,12 @@ export default function Settings() {
               {session?.user.email_confirmed_at ? 'Verified' : 'Not verified'}
             </Text>
           </View>
-          <TextField
-            label="Phone number (optional)"
-            placeholder="+14155552671"
-            keyboardType="phone-pad"
-            value={phone}
-            onChangeText={setPhone}
+          <ProfileFieldRow
+            label="Phone number"
+            value={profile.data?.phone || 'Add a phone number'}
+            onPress={() => openEditor('phone')}
           />
           <Text style={styles.hint}>Not verified — used for account recovery and important notices only.</Text>
-          {phoneError ? <Text style={styles.error}>{phoneError}</Text> : null}
-          {phoneSaved ? <Text style={styles.saved}>Saved!</Text> : null}
-          <Button label="Save phone number" variant="secondary" onPress={onSavePhone} loading={updatePhone.isPending} />
 
           <View style={{ marginTop: spacing.sm }}>
             <Button label="Change password" variant="secondary" onPress={() => setChangePasswordOpen(true)} />
@@ -329,10 +332,11 @@ export default function Settings() {
         label={editingField ? FIELD_META[editingField].label : ''}
         placeholder={editingField ? FIELD_META[editingField].placeholder : undefined}
         multiline={editingField ? FIELD_META[editingField].multiline : undefined}
+        keyboardType={editingField ? FIELD_META[editingField].keyboardType : undefined}
         value={draftValue}
         onChangeValue={setDraftValue}
         error={fieldError}
-        saving={updateProfile.isPending}
+        saving={editingField === 'phone' ? updatePhone.isPending : updateProfile.isPending}
         onCancel={closeEditor}
         onSave={onSaveField}
       />
@@ -403,8 +407,6 @@ const styles = StyleSheet.create({
   switchRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.lg },
   switchLabel: { ...typography.body, color: colors.textPrimary },
   switchHint: { ...typography.caption, color: colors.textSecondary, marginTop: 2 },
-  error: { ...typography.caption, color: colors.danger, marginBottom: spacing.md },
-  saved: { ...typography.caption, color: colors.success, marginBottom: spacing.md },
   divider: { height: 1, backgroundColor: colors.border, marginVertical: spacing.lg },
   hint: { ...typography.body, color: colors.textSecondary, marginBottom: spacing.md },
 });

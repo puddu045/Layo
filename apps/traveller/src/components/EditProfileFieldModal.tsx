@@ -1,4 +1,4 @@
-import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, View, type KeyboardTypeOptions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { TextField } from './TextField';
 import { Button } from './Button';
@@ -12,6 +12,7 @@ interface EditProfileFieldModalProps {
   onChangeValue: (value: string) => void;
   placeholder?: string;
   multiline?: boolean;
+  keyboardType?: KeyboardTypeOptions;
   error?: string;
   saving: boolean;
   onCancel: () => void;
@@ -29,6 +30,7 @@ export function EditProfileFieldModal({
   onChangeValue,
   placeholder,
   multiline,
+  keyboardType,
   error,
   saving,
   onCancel,
@@ -54,6 +56,7 @@ export function EditProfileFieldModal({
                 onChangeText={onChangeValue}
                 placeholder={placeholder}
                 multiline={multiline}
+                keyboardType={keyboardType}
                 numberOfLines={multiline ? 4 : undefined}
                 style={multiline ? { minHeight: 90, textAlignVertical: 'top' } : undefined}
                 autoFocus
