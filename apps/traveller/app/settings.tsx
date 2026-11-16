@@ -9,6 +9,7 @@ import { Avatar } from '../src/components/Avatar';
 import { AvatarCropModal } from '../src/components/AvatarCropModal';
 import { ImageViewerModal } from '../src/components/ImageViewerModal';
 import { ChangePasswordModal } from '../src/components/ChangePasswordModal';
+import { EditProfileFieldModal } from '../src/components/EditProfileFieldModal';
 import { TextField } from '../src/components/TextField';
 import { Button } from '../src/components/Button';
 import { ErrorState, LoadingState } from '../src/components/StateViews';
@@ -18,6 +19,28 @@ import { useUploadAvatar } from '../src/hooks/avatar-hooks';
 import { notifyConfirm, notifyInfo } from '../src/lib/notify';
 import { ApiError } from '../src/lib/api-client';
 import { colors, radius, spacing, typography } from '../src/theme/tokens';
+
+type ProfileField = 'displayName' | 'bio' | 'interests' | 'languages';
+
+const FIELD_META: Record<ProfileField, { title: string; label: string; multiline?: boolean; placeholder: string }> = {
+  displayName: { title: 'Display name', label: 'Display name', placeholder: 'Your name' },
+  bio: {
+    title: 'Bio',
+    label: 'Bio',
+    multiline: true,
+    placeholder: 'Tell other travellers a bit about you',
+  },
+  interests: {
+    title: 'Interests',
+    label: 'Interests (comma separated)',
+    placeholder: 'Hiking, photography, coffee',
+  },
+  languages: {
+    title: 'Languages',
+    label: 'Languages (comma separated)',
+    placeholder: 'English, Spanish',
+  },
+};
 
 export default function Settings() {
   const { signOut, session } = useAuth();
@@ -30,13 +53,7 @@ export default function Settings() {
   const [pickedPhotoUri, setPickedPhotoUri] = useState<string | undefined>();
   const [viewerOpen, setViewerOpen] = useState(false);
 
-  const [displayName, setDisplayName] = useState('');
-  const [bio, setBio] = useState('');
-  const [interests, setInterests] = useState('');
-  const [languages, setLanguages] = useState('');
   const [discoverable, setDiscoverable] = useState(true);
-  const [error, setError] = useState<string | undefined>();
-  const [saved, setSaved] = useState(false);
 
   const [phone, setPhone] = useState('');
   const [phoneError, setPhoneError] = useState<string | undefined>();
@@ -44,12 +61,12 @@ export default function Settings() {
 
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
 
+  const [editingField, setEditingField] = useState<ProfileField | null>(null);
+  const [draftValue, setDraftValue] = useState('');
+  const [fieldError, setFieldError] = useState<string | undefined>();
+
   useEffect(() => {
     if (profile.data) {
-      setDisplayName(profile.data.displayName);
-      setBio(profile.data.bio);
-      setInterests(profile.data.interests.join(', '));
-      setLanguages(profile.data.languages.join(', '));
       setDiscoverable(profile.data.discoverable);
       setPhone(profile.data.phone ?? '');
     }
@@ -71,26 +88,58 @@ export default function Settings() {
     );
   }
 
-  const onSave = async () => {
-    setError(undefined);
-    setSaved(false);
-    const parsed = updateProfileRequestSchema.safeParse({
-      displayName,
-      bio,
-      interests: interests.split(',').map((s) => s.trim()).filter(Boolean),
-      languages: languages.split(',').map((s) => s.trim()).filter(Boolean),
-      discoverable,
-    });
+  const currentFieldText = (field: ProfileField): string => {
+    if (!profile.data) return '';
+    switch (field) {
+      case 'displayName':
+        return profile.data.displayName;
+      case 'bio':
+        return profile.data.bio;
+      case 'interests':
+        return profile.data.interests.join(', ');
+      case 'languages':
+        return profile.data.languages.join(', ');
+    }
+  };
+
+  const openEditor = (field: ProfileField) => {
+    setFieldError(undefined);
+    setDraftValue(currentFieldText(field));
+    setEditingField(field);
+  };
+
+  const closeEditor = () => {
+    setEditingField(null);
+    setFieldError(undefined);
+  };
+
+  const onSaveField = async () => {
+    if (!editingField) return;
+    setFieldError(undefined);
+    const payload =
+      editingField === 'interests' || editingField === 'languages'
+        ? { [editingField]: draftValue.split(',').map((s) => s.trim()).filter(Boolean) }
+        : { [editingField]: draftValue.trim() };
+
+    const parsed = updateProfileRequestSchema.safeParse(payload);
     if (!parsed.success) {
-      setError(parsed.error.issues[0]?.message ?? 'Please check the form for errors');
+      setFieldError(parsed.error.issues[0]?.message ?? 'Please check this field');
       return;
     }
     try {
       await updateProfile.mutateAsync(parsed.data);
-      setSaved(true);
+      closeEditor();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not save changes');
+      setFieldError(err instanceof Error ? err.message : 'Could not save changes');
     }
+  };
+
+  const onToggleDiscoverable = (value: boolean) => {
+    setDiscoverable(value);
+    updateProfile.mutate(
+      { discoverable: value },
+      { onError: () => setDiscoverable(!value) },
+    );
   };
 
   const onSavePhone = async () => {
@@ -156,18 +205,30 @@ export default function Settings() {
       <KeyboardAvoidingView style={styles.keyboardAvoider} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <ScrollView contentContainerStyle={styles.scroll}>
           <View style={styles.avatarSection}>
+            {/* Nested Pressables, innermost wins the touch (same pattern as chats.tsx's avatar-vs-row
+                split) — tapping the photo enlarges it, tapping the camera badge on top of it picks a
+                new one directly, instead of the badge just triggering the same enlarge as the photo. */}
             <Pressable
               onPress={() => (profile.data?.photoUrl ? setViewerOpen(true) : onPickPhoto())}
               disabled={uploadAvatar.isPending}
               style={styles.avatarPressable}
             >
               <Avatar photoUrl={profile.data?.photoUrl} displayName={profile.data?.displayName ?? ''} size={96} />
-              <View style={styles.avatarEditBadge}>
+              <Pressable
+                onPress={onPickPhoto}
+                disabled={uploadAvatar.isPending}
+                hitSlop={6}
+                style={styles.avatarEditBadge}
+              >
                 <Ionicons name="camera" size={16} color={colors.white} />
-              </View>
+              </Pressable>
             </Pressable>
             <Text style={styles.avatarHint}>
-              {uploadAvatar.isPending ? 'Uploading…' : profile.data?.photoUrl ? 'Tap to view photo' : 'Tap to add a photo'}
+              {uploadAvatar.isPending
+                ? 'Uploading…'
+                : profile.data?.photoUrl
+                  ? 'Tap photo to view, tap camera to change'
+                  : 'Tap to add a photo'}
             </Text>
           </View>
 
@@ -197,30 +258,34 @@ export default function Settings() {
           <View style={styles.divider} />
 
           <Text style={styles.sectionTitle}>Profile</Text>
-        <TextField label="Display name" value={displayName} onChangeText={setDisplayName} />
-        <TextField
-          label="Bio"
-          value={bio}
-          onChangeText={setBio}
-          multiline
-          numberOfLines={4}
-          style={{ minHeight: 90, textAlignVertical: 'top' }}
+        <ProfileFieldRow
+          label="Display name"
+          value={profile.data?.displayName || '—'}
+          onPress={() => openEditor('displayName')}
         />
-        <TextField label="Interests (comma separated)" value={interests} onChangeText={setInterests} />
-        <TextField label="Languages (comma separated)" value={languages} onChangeText={setLanguages} />
+        <ProfileFieldRow
+          label="Bio"
+          value={profile.data?.bio || 'Add a short bio'}
+          onPress={() => openEditor('bio')}
+        />
+        <ProfileFieldRow
+          label="Interests"
+          value={profile.data?.interests.length ? profile.data.interests.join(', ') : 'Add your interests'}
+          onPress={() => openEditor('interests')}
+        />
+        <ProfileFieldRow
+          label="Languages"
+          value={profile.data?.languages.length ? profile.data.languages.join(', ') : 'Add languages you speak'}
+          onPress={() => openEditor('languages')}
+        />
 
         <View style={styles.switchRow}>
           <View style={{ flex: 1 }}>
             <Text style={styles.switchLabel}>Discoverable to other travellers</Text>
             <Text style={styles.switchHint}>Turn this off to hide yourself from everyone's Discover tab.</Text>
           </View>
-          <Switch value={discoverable} onValueChange={setDiscoverable} />
+          <Switch value={discoverable} onValueChange={onToggleDiscoverable} />
         </View>
-
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-        {saved ? <Text style={styles.saved}>Saved!</Text> : null}
-
-        <Button label="Save changes" onPress={onSave} loading={updateProfile.isPending} />
 
         <View style={styles.divider} />
 
@@ -257,9 +322,54 @@ export default function Settings() {
       />
 
       <ChangePasswordModal visible={changePasswordOpen} onClose={() => setChangePasswordOpen(false)} />
+
+      <EditProfileFieldModal
+        visible={editingField !== null}
+        title={editingField ? FIELD_META[editingField].title : ''}
+        label={editingField ? FIELD_META[editingField].label : ''}
+        placeholder={editingField ? FIELD_META[editingField].placeholder : undefined}
+        multiline={editingField ? FIELD_META[editingField].multiline : undefined}
+        value={draftValue}
+        onChangeValue={setDraftValue}
+        error={fieldError}
+        saving={updateProfile.isPending}
+        onCancel={closeEditor}
+        onSave={onSaveField}
+      />
     </ScreenContainer>
   );
 }
+
+function ProfileFieldRow({ label, value, onPress }: { label: string; value: string; onPress: () => void }) {
+  return (
+    <Pressable onPress={onPress} style={fieldRowStyles.row}>
+      <View style={{ flex: 1 }}>
+        <Text style={fieldRowStyles.label}>{label}</Text>
+        <Text style={fieldRowStyles.value} numberOfLines={3}>
+          {value}
+        </Text>
+      </View>
+      <Ionicons name="pencil" size={18} color={colors.primary} />
+    </Pressable>
+  );
+}
+
+const fieldRowStyles = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: spacing.sm,
+  },
+  label: { ...typography.label, color: colors.textSecondary, marginBottom: 2 },
+  value: { ...typography.body, color: colors.textPrimary },
+});
 
 const styles = StyleSheet.create({
   keyboardAvoider: { flex: 1 },
