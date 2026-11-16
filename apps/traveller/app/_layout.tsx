@@ -63,6 +63,12 @@ export default function RootLayout() {
           screenOptions={{
             headerShown: false,
             contentStyle: { backgroundColor: colors.background },
+            // React Navigation's default header is plain white, which stood out against this
+            // app's peach background on every screen that shows one (Settings, Chat, journeys,
+            // …) — tint it to match instead of leaving it looking like an unstyled system bar.
+            headerStyle: { backgroundColor: colors.background },
+            headerTintColor: colors.navy900,
+            headerShadowVisible: false,
           }}
         >
           <Stack.Screen name="index" />
