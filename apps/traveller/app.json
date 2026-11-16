@@ -8,7 +8,7 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "splash": {
-      "backgroundColor": "#FFE8DA"
+      "backgroundColor": "#FDD8C7"
     },
     "assetBundlePatterns": [
       "**/*"
@@ -19,7 +19,8 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#FFE8DA"
+        "foregroundImage": "./assets/adaptive-icon-foreground.png",
+        "backgroundColor": "#FDD8C7"
       },
       "package": "com.layo.traveller",
       "softwareKeyboardLayoutMode": "pan",
