@@ -62,8 +62,10 @@ function describe(n: Notification): { title: string; body: string; onPress?: () 
     case 'TRAVELLING_TOGETHER': {
       const connectionId = typeof n.payload.connectionId === 'string' ? n.payload.connectionId : undefined;
       const body = typeof n.payload.body === 'string' ? n.payload.body : "You're travelling together again!";
+      const otherName =
+        typeof n.payload.otherUserDisplayName === 'string' ? n.payload.otherUserDisplayName : 'Someone';
       return {
-        title: 'Travelling together again',
+        title: `Travelling with ${otherName} again`,
         body,
         onPress: () => router.push(connectionId ? `/chat/${connectionId}` : '/(tabs)/chats'),
       };

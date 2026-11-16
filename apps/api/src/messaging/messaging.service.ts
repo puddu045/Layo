@@ -164,12 +164,32 @@ export class MessagingService {
     this.gateway.emitToUser(userAId, socketEvents.MESSAGE_NEW, { connectionId, message });
     this.gateway.emitToUser(userBId, socketEvents.MESSAGE_NEW, { connectionId, message });
 
+    // Each side's notification names the OTHER participant — the chat screen itself doesn't
+    // need this (you already know who you're talking to), but the notification centre has no
+    // other context, so without it every entry read as an anonymous "you're both on EK36 again".
+    const [userADisplayName, userBDisplayName] = await Promise.all([
+      this.getDisplayName(userAId),
+      this.getDisplayName(userBId),
+    ]);
     await Promise.all([
-      this.notificationsService.create(userAId, 'TRAVELLING_TOGETHER', { connectionId, body }),
-      this.notificationsService.create(userBId, 'TRAVELLING_TOGETHER', { connectionId, body }),
+      this.notificationsService.create(userAId, 'TRAVELLING_TOGETHER', {
+        connectionId,
+        body,
+        otherUserDisplayName: userBDisplayName,
+      }),
+      this.notificationsService.create(userBId, 'TRAVELLING_TOGETHER', {
+        connectionId,
+        body,
+        otherUserDisplayName: userADisplayName,
+      }),
     ]);
 
     return message;
+  }
+
+  private async getDisplayName(userId: string): Promise<string> {
+    const profile = await this.prisma.client.profile.findUnique({ where: { userId }, select: { displayName: true } });
+    return profile?.displayName ?? 'Someone';
   }
 }
 
